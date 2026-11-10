@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button } from "./ui/button";
 import { BACKGROUNDS, GLOWS, LIQUIDS, type Settings, type Swatch } from "@/lib/water/settings";
 import type { Kind } from "@/lib/water/objects";
 
@@ -23,7 +24,7 @@ function Swatches({ list, value, onPick }: { list: Swatch[]; value: number; onPi
   return (
     <div className="flex gap-3">
       {list.map((s, i) => (
-        <button
+        <Button variant="ghost"
           key={s.name}
           onClick={() => onPick(i)}
           className="swatch"
@@ -40,12 +41,12 @@ function Swatches({ list, value, onPick }: { list: Swatch[]; value: number; onPi
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <button className="toggle-row" onClick={() => onChange(!on)} role="switch" aria-checked={on}>
+    <Button variant="ghost" className="toggle-row" onClick={() => onChange(!on)} role="switch" aria-checked={on}>
       <span>{label}</span>
       <span className="toggle" data-on={on}>
         <span />
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -72,19 +73,19 @@ export function SettingsPanel(props: {
       <div className="sheet">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-2xl text-primary text-glow">Beállítások</h2>
-          <button onClick={props.onClose} className="btn-ghost">Kész</button>
+          <Button variant="ghost" onClick={props.onClose} className="btn-ghost">Kész</Button>
         </div>
 
         <Section title="Tegyél valamit a vízbe">
           <div className="grid grid-cols-5 gap-2">
             {THINGS.map((t) => (
-              <button key={t.kind} className="thing-btn" onClick={() => props.onAdd(t.kind)}>
+              <Button variant="ghost" key={t.kind} className="thing-btn" onClick={() => props.onAdd(t.kind)}>
                 <span className="text-2xl">{t.icon}</span>
                 <span className="text-xs">{t.label}</span>
-              </button>
+              </Button>
             ))}
           </div>
-          <button className="btn-ghost w-full" onClick={props.onClear}>Mindent kiveszek</button>
+          <Button variant="ghost" className="btn-ghost w-full" onClick={props.onClear}>Mindent kiveszek</Button>
         </Section>
 
         <Section title="Háttér">
@@ -112,13 +113,13 @@ export function SettingsPanel(props: {
 
         <Section title="Döntés">
           <Toggle label="A telefon döntése mozgatja a vizet" on={s.tiltOn} onChange={(v) => onChange({ tiltOn: v })} />
-          <button className="btn-ghost w-full" onClick={props.onLevel}>A mostani helyzet legyen a vízszintes</button>
+          <Button variant="ghost" className="btn-ghost w-full" onClick={props.onLevel}>A mostani helyzet legyen a vízszintes</Button>
         </Section>
 
         <Section title="Gyerekzár">
-          <button className="btn-neon w-full" onClick={() => document.documentElement.requestFullscreen?.().catch(() => {})}>
+          <Button variant="ghost" className="btn-neon w-full" onClick={() => document.documentElement.requestFullscreen?.().catch(() => {})}>
             Teljes képernyő
-          </button>
+          </Button>
           <div className="space-y-2 text-sm text-muted-foreground">
             <p><b className="text-foreground">iPhone:</b> Beállítások → Kisegítő lehetőségek → Irányított hozzáférés bekapcsolása. Az appban nyomd meg háromszor az oldalsó gombot.</p>
             <p><b className="text-foreground">Android:</b> Beállítások → Biztonság → Alkalmazás rögzítése. Majd az alkalmazásváltóban rögzítsd ezt az appot.</p>
