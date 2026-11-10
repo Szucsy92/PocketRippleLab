@@ -109,7 +109,7 @@ export function WaterApp() {
       const t = makeThing(k, x, y, objScale());
       world.things.push(t);
       const big = k === "fish" ? 2.5 : k === "pebble" ? 5 : 7;
-      sim.disturb(x / world.cell, y / world.cell, (t.r / world.cell) * 1.2, -big);
+      sim.disturb(x / world.cell, y / world.cell, Math.max(5.5, (t.r / world.cell) * 1.65), -big * 1.45);
       if (world.things.length > 40) world.things.shift();
     };
     const clear = () => {
@@ -136,7 +136,7 @@ export function WaterApp() {
         }
       }
       pointers.set(e.pointerId, { x, y, t: performance.now(), grab });
-      if (grab === null) sim.disturb(toSim(x), toSim(y), 3.2, -5);
+      if (grab === null) sim.disturb(toSim(x), toSim(y), 8.5, -7.5);
     };
     const onMove = (e: PointerEvent) => {
       const p = pointers.get(e.pointerId);
@@ -162,10 +162,10 @@ export function WaterApp() {
         const stepPx = world.cell * 1.5;
         const n = Math.max(1, Math.ceil(dist / stepPx));
         const speed = dist / dt;
-        const s = -Math.min(2.2, 0.25 + speed * 0.0012);
+        const s = -Math.min(3.2, 0.4 + speed * 0.0017);
         for (let i = 1; i <= n; i++) {
           const f = i / n;
-          sim.disturb(toSim(p.x + dx * f), toSim(p.y + dy * f), 2.6, s / Math.sqrt(n) * 1.6);
+          sim.disturb(toSim(p.x + dx * f), toSim(p.y + dy * f), 6.2, s / Math.sqrt(n) * 2.0);
         }
       }
       p.x = x;
@@ -179,7 +179,7 @@ export function WaterApp() {
         if (t) {
           t.grabbed = null;
           // set down: a splash
-          sim.disturb(toSim(t.x), toSim(t.y), (t.r / world.cell) * 1.1, -4);
+          sim.disturb(toSim(t.x), toSim(t.y), Math.max(6, (t.r / world.cell) * 1.5), -6.2);
         }
       }
       pointers.delete(e.pointerId);
@@ -242,7 +242,7 @@ export function WaterApp() {
           liquid: liq.hex === "transparent" ? [0, 0, 0] : hexToRgb(liq.hex),
           liquidAmt: liq.hex === "transparent" ? 0 : 0.42,
           glow: hexToRgb(GLOWS[s.glowColor]?.hex ?? "#36f1cd"),
-          glowAmt: s.glowOn ? s.glowAmount * 1.2 : 0,
+          glowAmt: s.glowOn ? s.glowAmount * 1.65 : 0,
           time: (now - start) / 1000,
         });
       }
