@@ -39,11 +39,11 @@ void main(){
   float hu = H(uv - vec2(0.0, uTexel.y));
   float hd = H(uv + vec2(0.0, uTexel.y));
   vec2 g = vec2(hr - hl, hd - hu);
-  vec3 n = normalize(vec3(-g * 0.9, 1.0));
+  vec3 n = normalize(vec3(-g * 1.65, 1.0));
   float lap = hl + hr + hu + hd - 4.0 * hc;
 
   // Refracted view of the bottom
-  vec2 ruv = uv + n.xy * vec2(1.0, uAspect) * 0.045;
+  vec2 ruv = clamp(uv + n.xy * vec2(1.0, uAspect) * 0.072, vec2(0.001), vec2(0.999));
   vec2 q = ruv * vec2(uAspect, 1.0);
 
   float vign = 1.0 - smoothstep(0.25, 1.05, length((ruv - 0.5) * vec2(uAspect, 1.0) * 1.3));
@@ -56,7 +56,11 @@ void main(){
   vec4 obj = texture(uObj, ruv);
   bottom = mix(bottom, obj.rgb, obj.a);
 
-  vec3 col = mix(bottom, uLiquid * (0.25 + 0.5 * vign), uLiquidAmt);
+  vec3 col = mix(bottom, uLiquid * (0.20 + 0.58 * vign), uLiquidAmt);
+  // Depth absorption: longer optical paths lose red first, like real water.
+  float opticalDepth = clamp(0.22 + length(g) * 1.8, 0.0, 1.0);
+  vec3 absorption = vec3(0.94, 0.985, 1.0);
+  col *= mix(vec3(1.0), absorption, opticalDepth * (0.35 + uLiquidAmt * 0.5));
 
   // Caustics: converging wavefronts focus light
   float caustic = clamp(-lap * 0.55, 0.0, 1.0);
@@ -71,7 +75,7 @@ void main(){
   col += vec3(0.12) * rim;
 
   // Glow: ripples emit light
-  float energy = clamp(abs(hc) * 0.12 + rim * 0.9, 0.0, 1.2);
+  float energy = clamp(abs(hc) * 0.16 + rim * 0.9 + caustic * 0.22, 0.0, 1.2);
   col += uGlow * uGlowAmt * (energy * 0.75 + caustic * 0.9);
 
   o = vec4(col, 1.0);

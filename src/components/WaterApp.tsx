@@ -74,7 +74,7 @@ export function WaterApp() {
       const w = window.innerWidth;
       const h = window.innerHeight;
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const cell = Math.max(w, h) / 300;
+      const cell = Math.max(w, h) / 420;
       const sw = Math.max(8, Math.round(w / cell));
       const shh = Math.max(8, Math.round(h / cell));
       const old = sim;

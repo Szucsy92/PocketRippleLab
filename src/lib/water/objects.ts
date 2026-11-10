@@ -393,7 +393,7 @@ export function drawSurface(ctx: CanvasRenderingContext2D, things: Thing[], dpr:
     if (!isFloating(t.kind)) continue;
     const bob = 1 + Math.max(-0.12, Math.min(0.12, t.lift * 0.02)) + (t.grabbed !== null ? 0.18 : 0);
     const lean = Math.sin(t.phase * 1.7) * 0.06;
-    const sh = t.grabbed !== null ? 22 : 9;
+    const sh = t.grabbed !== null ? 26 : 12;
     ctx.save();
     ctx.translate(t.x + sh, t.y + sh);
     ctx.rotate(t.angle);
