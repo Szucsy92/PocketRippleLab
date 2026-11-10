@@ -91,13 +91,15 @@ export class WaterRenderer {
     if (!gl) throw new Error("WebGL2 not supported");
     this.gl = gl;
     const sh = (type: number, src: string) => {
-      const s = gl.createShader(type)!;
+      const s = gl.createShader(type);
+      if (!s) throw new Error("Cannot create shader");
       gl.shaderSource(s, src);
       gl.compileShader(s);
       if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || "shader");
       return s;
     };
-    const p = gl.createProgram()!;
+    const p = gl.createProgram();
+    if (!p) throw new Error("Cannot create program");
     gl.attachShader(p, sh(gl.VERTEX_SHADER, VS));
     gl.attachShader(p, sh(gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(p);
@@ -114,7 +116,8 @@ export class WaterRenderer {
       this.u[n] = gl.getUniformLocation(p, n);
 
     const mk = () => {
-      const t = gl.createTexture()!;
+      const t = gl.createTexture();
+      if (!t) throw new Error("Cannot create texture");
       gl.bindTexture(gl.TEXTURE_2D, t);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
