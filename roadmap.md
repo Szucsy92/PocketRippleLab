@@ -1,0 +1,2 @@
+- [ ] Finish the water game's appearance and verify touch, objects, and settings.
+- [ ] Suggest the next step after remixing.

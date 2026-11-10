@@ -15,8 +15,7 @@ import {
   type Settings,
 } from "@/lib/water/settings";
 import { SettingsPanel } from "./SettingsPanel";
-
-const CORNER = 72;
+import { Button } from "./ui/button";
 
 export function WaterApp() {
   const glRef = useRef<HTMLCanvasElement>(null);
@@ -49,8 +48,9 @@ export function WaterApp() {
   };
 
   useEffect(() => {
-    const glc = glRef.current!;
-    const top = topRef.current!;
+    const glc = glRef.current;
+    const top = topRef.current;
+    if (!glc || !top) return;
     let renderer: WaterRenderer;
     try {
       renderer = new WaterRenderer(glc);
@@ -58,9 +58,10 @@ export function WaterApp() {
       setFailed(true);
       return;
     }
-    const topCtx = top.getContext("2d")!;
+    const topCtx = top.getContext("2d");
     const under = document.createElement("canvas");
-    const underCtx = under.getContext("2d")!;
+    const underCtx = under.getContext("2d");
+    if (!topCtx || !underCtx) { setFailed(true); return; }
     const tilt = new Tilt();
     tilt.start();
 
@@ -316,7 +317,6 @@ export function WaterApp() {
 
       <div
         className="corner-hold"
-        style={{ width: CORNER, height: CORNER }}
         onPointerDown={startHold}
         onPointerUp={endHold}
         onPointerCancel={endHold}
@@ -354,9 +354,9 @@ export function WaterApp() {
               Érintsd meg a vizet, és nézd, ahogy fodrozódik. A beállításokhoz tartsd nyomva a{" "}
               <b className="text-foreground">jobb felső sarkot</b> 3 másodpercig.
             </p>
-            <button onClick={begin} className="btn-neon mt-6 w-full">
+            <Button onClick={begin} className="btn-neon mt-6 w-full">
               Kezdjük!
-            </button>
+            </Button>
           </div>
         </div>
       )}
