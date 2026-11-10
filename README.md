@@ -1,14 +1,24 @@
-# Welcome to your Lovable project
+# Pocket Ripple Lab
+
+Egy teljesképernyős gyerekzáras natív app-ot szeretnék, ahol sötétes alap háttéren érintésre olyan vizuális érzést kelt mintha valódi víz/folyadék fodrozódna.
+
+Beállítható lenne a folyadék és a háttér színe (max 5 kellemes szín, a víz alapból áttetsző)
+
+Beállítható lenne glow a folyadék viselkedésére.
+
+A fodrozódás az ujj alatt/ujjak alatt valósághű, a szélekről vissza verődő, fizikailag jól beállított lenne.
+
+Lehetne "tenni" dolgokat a vízbe, ilyenkor a giroszkóp és a tilt játszana szerepet.
 
 This project was built with [Lovable](https://lovable.dev).
 
 ## Build with Lovable
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/c7edf4cd-fe80-41db-a79f-f61bc77d689e).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
@@ -20,10 +30,3 @@ cd <repository-name>
 npm i
 npm run dev
 ```
-
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
