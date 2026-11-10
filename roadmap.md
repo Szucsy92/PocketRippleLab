@@ -1,2 +1,2 @@
-- [ ] Finish the water game's appearance and verify touch, objects, and settings.
-- [ ] Suggest the next step after remixing.
+- [x] Finish the water game's appearance and verify touch, objects, and settings.
+- [x] Suggest the next step after remixing: try it on a real phone, especially tilt and OS child lock.
