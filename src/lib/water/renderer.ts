@@ -165,16 +165,16 @@ export class WaterRenderer {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.oTex);
     const u = this.u;
-    gl.uniform1i(u.uH, 0);
-    gl.uniform1i(u.uObj, 1);
-    gl.uniform2f(u.uTexel, 1 / this.simW, 1 / this.simH);
-    gl.uniform3fv(u.uBg, opts.bg);
-    gl.uniform3fv(u.uLiquid, opts.liquid);
-    gl.uniform1f(u.uLiquidAmt, opts.liquidAmt);
-    gl.uniform3fv(u.uGlow, opts.glow);
-    gl.uniform1f(u.uGlowAmt, opts.glowAmt);
-    gl.uniform1f(u.uAspect, c.width / c.height);
-    gl.uniform1f(u.uTime, opts.time);
+    gl.uniform1i((u["uH"] ?? null), 0);
+    gl.uniform1i((u["uObj"] ?? null), 1);
+    gl.uniform2f((u["uTexel"] ?? null), 1 / this.simW, 1 / this.simH);
+    gl.uniform3fv((u["uBg"] ?? null), opts.bg);
+    gl.uniform3fv((u["uLiquid"] ?? null), opts.liquid);
+    gl.uniform1f((u["uLiquidAmt"] ?? null), opts.liquidAmt);
+    gl.uniform3fv((u["uGlow"] ?? null), opts.glow);
+    gl.uniform1f((u["uGlowAmt"] ?? null), opts.glowAmt);
+    gl.uniform1f((u["uAspect"] ?? null), c.width / c.height);
+    gl.uniform1f((u["uTime"] ?? null), opts.time);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 }

@@ -127,6 +127,7 @@ export function WaterApp() {
       let grab: number | null = null;
       for (let i = world.things.length - 1; i >= 0; i--) {
         const t = world.things[i];
+        if (!t) continue;
         if (isFloating(t.kind) && t.grabbed === null && Math.hypot(t.x - x, t.y - y) < t.r * 1.3) {
           t.grabbed = e.pointerId;
           t.vx = t.vy = 0;
@@ -234,13 +235,13 @@ export function WaterApp() {
         } else renderer.uploadObjects(null);
         drawSurface(topCtx, world.things, dpr);
 
-        const liq = LIQUIDS[s.liquid];
+        const liq = LIQUIDS[s.liquid] ?? { hex: "transparent" };
         renderer.draw({
           height: sim.cur,
-          bg: hexToRgb(BACKGROUNDS[s.bg].hex),
+          bg: hexToRgb(BACKGROUNDS[s.bg]?.hex ?? "#0a0a14"),
           liquid: liq.hex === "transparent" ? [0, 0, 0] : hexToRgb(liq.hex),
           liquidAmt: liq.hex === "transparent" ? 0 : 0.42,
-          glow: hexToRgb(GLOWS[s.glowColor].hex),
+          glow: hexToRgb(GLOWS[s.glowColor]?.hex ?? "#36f1cd"),
           glowAmt: s.glowOn ? s.glowAmount * 1.2 : 0,
           time: (now - start) / 1000,
         });
@@ -301,7 +302,8 @@ export function WaterApp() {
   };
 
   const begin = async () => {
-    await Tilt.requestPermission();
+    setStarted(true);
+    void Tilt.requestPermission();
     try {
       await document.documentElement.requestFullscreen?.();
     } catch {

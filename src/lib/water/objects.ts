@@ -27,7 +27,7 @@ export const isFloating = (k: Kind) => k === "duck" || k === "boat";
 export const isUnder = (k: Kind) => !isFloating(k);
 
 export function makeThing(kind: Kind, x: number, y: number, scale: number): Thing {
-  const pick = () => NEON[Math.floor(Math.random() * NEON.length)];
+  const pick = () => (NEON[Math.floor(Math.random() * NEON.length)] ?? "#36f1cd");
   const base = { duck: 26, boat: 30, ball: 15, pebble: 13, fish: 20 }[kind] * scale;
   return {
     id: nextId++,
@@ -98,7 +98,7 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
       let speed = 55;
       for (const p of world.touches) {
         const d = Math.hypot(t.x - p.x, t.y - p.y);
-        if (d < 160) {
+        if (d > 0 && d < 160) {
           dx += ((t.x - p.x) / d) * 4;
           dy += ((t.y - p.y) / d) * 4;
           speed = 190;
@@ -176,8 +176,10 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
   // Collisions within the same layer
   for (let i = 0; i < things.length; i++) {
     const a = things[i];
+    if (!a) continue;
     for (let j = i + 1; j < things.length; j++) {
       const b = things[j];
+      if (!b) continue;
       if (isFloating(a.kind) !== isFloating(b.kind)) continue;
       if (a.kind === "fish" || b.kind === "fish") continue;
       const dx = b.x - a.x;
