@@ -15,4 +15,11 @@ describe("Water rules", () => {
     expect(sim.cur[10]).toBe(1);
     expect(sim.cur[11]).toBe(1);
   });
+  it("creates a broad rounded impact with a raised outer lip", () => {
+    const sim = new WaterSim(41, 41);
+    sim.disturb(20, 20, 10, -5);
+    expect(sim.cur[20 * 41 + 20]).toBeLessThan(0);
+    expect(sim.cur[20 * 41 + 20 + 9]).toBeGreaterThan(0);
+    expect(sim.cur[20 * 41 + 20 + 13]).toBe(0);
+  });
 });
