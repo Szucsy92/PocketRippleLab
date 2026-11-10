@@ -28,3 +28,6 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+- Keep water rendering and object motion browser-side in the water modules; device sensors and drawing require browser APIs.
+- Fullscreen is an immersive display mode, not an OS child lock; device-level access restrictions must remain explicit.

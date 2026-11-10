@@ -153,3 +153,50 @@
     color: var(--color-foreground);
   }
 }
+
+/* Water-game theme and controls */
+:root {
+  --background: oklch(0.15 0.018 285);
+  --foreground: oklch(0.94 0.012 190);
+  --card: oklch(0.20 0.014 285);
+  --popover: var(--card);
+  --primary: oklch(0.86 0.16 174);
+  --primary-foreground: oklch(0.18 0.025 180);
+  --muted: oklch(0.25 0.015 285);
+  --muted-foreground: oklch(0.71 0.025 230);
+  --accent: oklch(0.30 0.045 180);
+  --accent-foreground: var(--foreground);
+  --border: oklch(0.40 0.045 180 / 0.5);
+  --input: var(--border);
+  --ring: var(--primary);
+  --radius: 0.5rem;
+}
+
+body { margin: 0; font-family: 'Trebuchet MS', sans-serif; }
+.font-display { font-family: 'Trebuchet MS', sans-serif; }
+.water-stage { position: fixed; inset: 0; overflow: hidden; background: var(--background); touch-action: none; user-select: none; }
+.water-layer { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.corner-hold { position: absolute; right: 0; top: 0; width: 72px; height: 72px; display: grid; place-items: center; z-index: 10; }
+.hold-track,.hold-ring { fill: none; stroke-width: 2; }
+.hold-track { stroke: var(--border); }
+.hold-ring { stroke: var(--primary); transform: rotate(-90deg); transform-origin: center; }
+.welcome-veil { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; background: oklch(0.15 0.018 285 / 0.3); }
+.glass-card { padding: 28px; border-radius: 8px; background: oklch(0.20 0.014 285 / 0.85); border: 1px solid var(--border); backdrop-filter: blur(12px); line-height: 1.65; }
+.text-glow { text-shadow: 0 0 20px oklch(0.86 0.16 174 / 0.3); }
+.btn-neon { background: var(--primary); color: var(--primary-foreground); min-height: 44px; border-radius: 6px; font-weight: 700; }
+.btn-ghost { background: var(--muted); color: var(--foreground); min-height: 40px; border-radius: 6px; }
+.sheet-veil { position: absolute; inset: 0; z-index: 20; display: flex; justify-content: flex-end; background: oklch(0.05 0 0 / 0.5); backdrop-filter: blur(6px); touch-action: auto; }
+.sheet { width: min(100%, 420px); overflow-y: auto; overscroll-behavior: contain; background: var(--card); padding: max(24px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 28px; }
+.sheet section { border-top: 1px solid var(--border); padding-top: 20px; }
+.sheet p { line-height: 1.6; }
+.thing-btn { height: 76px; display: flex; flex-direction: column; gap: 8px; background: var(--muted); color: var(--foreground); border-radius: 6px; padding: 8px 4px; }
+.swatch { flex: 0 0 40px; width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 2px solid var(--border); }
+.swatch[data-active='true'] { outline: 2px solid var(--foreground); outline-offset: 4px; }
+.swatch[data-clear='true'] { background: repeating-conic-gradient(var(--muted) 0% 25%, var(--background) 0% 50%) 50% / 12px 12px; }
+.toggle-row { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 0; background: transparent; color: var(--foreground); white-space: normal; text-align: left; height: auto; min-height: 40px; }
+.toggle { flex: 0 0 42px; width: 42px; height: 24px; border-radius: 20px; padding: 3px; background: var(--muted); border: 1px solid var(--border); }
+.toggle > span { display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--muted-foreground); transition: transform 0.2s; }
+.toggle[data-on='true'] { background: var(--primary); }
+.toggle[data-on='true'] > span { transform: translateX(17px); background: var(--primary-foreground); }
+.neon-range { display: block; width: 100%; height: 32px; accent-color: var(--primary); }
+@media (prefers-reduced-motion: reduce) { .toggle > span { transition: none; } }

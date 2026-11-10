@@ -15,8 +15,7 @@ import {
   type Settings,
 } from "@/lib/water/settings";
 import { SettingsPanel } from "./SettingsPanel";
-
-const CORNER = 72;
+import { Button } from "./ui/button";
 
 export function WaterApp() {
   const glRef = useRef<HTMLCanvasElement>(null);
@@ -49,8 +48,9 @@ export function WaterApp() {
   };
 
   useEffect(() => {
-    const glc = glRef.current!;
-    const top = topRef.current!;
+    const glc = glRef.current;
+    const top = topRef.current;
+    if (!glc || !top) return;
     let renderer: WaterRenderer;
     try {
       renderer = new WaterRenderer(glc);
@@ -58,9 +58,10 @@ export function WaterApp() {
       setFailed(true);
       return;
     }
-    const topCtx = top.getContext("2d")!;
+    const topCtx = top.getContext("2d");
     const under = document.createElement("canvas");
-    const underCtx = under.getContext("2d")!;
+    const underCtx = under.getContext("2d");
+    if (!topCtx || !underCtx) { setFailed(true); return; }
     const tilt = new Tilt();
     tilt.start();
 
@@ -126,6 +127,7 @@ export function WaterApp() {
       let grab: number | null = null;
       for (let i = world.things.length - 1; i >= 0; i--) {
         const t = world.things[i];
+        if (!t) continue;
         if (isFloating(t.kind) && t.grabbed === null && Math.hypot(t.x - x, t.y - y) < t.r * 1.3) {
           t.grabbed = e.pointerId;
           t.vx = t.vy = 0;
@@ -233,13 +235,13 @@ export function WaterApp() {
         } else renderer.uploadObjects(null);
         drawSurface(topCtx, world.things, dpr);
 
-        const liq = LIQUIDS[s.liquid];
+        const liq = LIQUIDS[s.liquid] ?? { hex: "transparent" };
         renderer.draw({
           height: sim.cur,
-          bg: hexToRgb(BACKGROUNDS[s.bg].hex),
+          bg: hexToRgb(BACKGROUNDS[s.bg]?.hex ?? "#0a0a14"),
           liquid: liq.hex === "transparent" ? [0, 0, 0] : hexToRgb(liq.hex),
           liquidAmt: liq.hex === "transparent" ? 0 : 0.42,
-          glow: hexToRgb(GLOWS[s.glowColor].hex),
+          glow: hexToRgb(GLOWS[s.glowColor]?.hex ?? "#36f1cd"),
           glowAmt: s.glowOn ? s.glowAmount * 1.2 : 0,
           time: (now - start) / 1000,
         });
@@ -300,7 +302,8 @@ export function WaterApp() {
   };
 
   const begin = async () => {
-    await Tilt.requestPermission();
+    setStarted(true);
+    void Tilt.requestPermission();
     try {
       await document.documentElement.requestFullscreen?.();
     } catch {
@@ -316,7 +319,6 @@ export function WaterApp() {
 
       <div
         className="corner-hold"
-        style={{ width: CORNER, height: CORNER }}
         onPointerDown={startHold}
         onPointerUp={endHold}
         onPointerCancel={endHold}
@@ -354,9 +356,9 @@ export function WaterApp() {
               Érintsd meg a vizet, és nézd, ahogy fodrozódik. A beállításokhoz tartsd nyomva a{" "}
               <b className="text-foreground">jobb felső sarkot</b> 3 másodpercig.
             </p>
-            <button onClick={begin} className="btn-neon mt-6 w-full">
+            <Button onClick={begin} className="btn-neon mt-6 w-full">
               Kezdjük!
-            </button>
+            </Button>
           </div>
         </div>
       )}

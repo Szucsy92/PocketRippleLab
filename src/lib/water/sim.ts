@@ -29,7 +29,7 @@ export class WaterSim {
         const i = row + x;
         const l = x > 0 ? i - 1 : i;
         const r = x < w - 1 ? i + 1 : i;
-        p[i] = ((c[l] + c[r] + c[i + up] + c[i + dn]) * 0.5 - p[i]) * damping;
+        p[i] = (((c[l] ?? 0) + (c[r] ?? 0) + (c[i + up] ?? 0) + (c[i + dn] ?? 0)) * 0.5 - (p[i] ?? 0)) * damping;
       }
     }
     this.cur = p;
@@ -47,7 +47,7 @@ export class WaterSim {
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const d = Math.hypot(x - cx, y - cy) / r;
-        if (d < 1) cur[y * w + x] += strength * 0.5 * (1 + Math.cos(Math.PI * d));
+        if (d < 1) cur[y * w + x] = (cur[y * w + x] ?? 0) + strength * 0.5 * (1 + Math.cos(Math.PI * d));
       }
     }
   }
@@ -59,7 +59,7 @@ export class WaterSim {
     const cy = h / 2;
     for (let y = 0; y < h; y++) {
       const by = dy * (y - cy);
-      for (let x = 0; x < w; x++) cur[y * w + x] -= dx * (x - cx) + by;
+      for (let x = 0; x < w; x++) cur[y * w + x] = (cur[y * w + x] ?? 0) - dx * (x - cx) - by;
     }
   }
 
@@ -72,8 +72,8 @@ export class WaterSim {
     const tx = fx - ix;
     const ty = fy - iy;
     const i = iy * w + ix;
-    const a = cur[i] + (cur[i + 1] - cur[i]) * tx;
-    const b = cur[i + w] + (cur[i + w + 1] - cur[i + w]) * tx;
+    const a = (cur[i] ?? 0) + ((cur[i + 1] ?? 0) - (cur[i] ?? 0)) * tx;
+    const b = (cur[i + w] ?? 0) + ((cur[i + w + 1] ?? 0) - (cur[i + w] ?? 0)) * tx;
     return a + (b - a) * ty;
   }
 
