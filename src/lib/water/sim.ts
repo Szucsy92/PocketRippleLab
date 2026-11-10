@@ -3,6 +3,11 @@
  * stable for this stencil). Edges mirror their own value, which gives
  * Neumann boundaries: waves reflect off the screen edges.
  */
+function smoothstep(edge0: number, edge1: number, x: number) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
 export class WaterSim {
   w: number;
   h: number;
@@ -36,18 +41,31 @@ export class WaterSim {
     this.prev = c;
   }
 
-  /** Smooth cosine bump. Negative strength = pushed-down water. */
+  /**
+   * Broad, soft impact bowl with a subtle displaced-water lip.
+   * Negative strength pushes the centre down and lifts the surrounding ring.
+   */
   disturb(cx: number, cy: number, radius: number, strength: number) {
     const { w, h, cur } = this;
     const r = Math.max(1, radius);
-    const x0 = Math.max(0, Math.floor(cx - r));
-    const x1 = Math.min(w - 1, Math.ceil(cx + r));
-    const y0 = Math.max(0, Math.floor(cy - r));
-    const y1 = Math.min(h - 1, Math.ceil(cy + r));
+    // Include the outer lip in the influence area; the wider footprint avoids
+    // the sharp pin-prick look of a small, centre-peaked impulse.
+    const extent = r * 1.18;
+    const x0 = Math.max(0, Math.floor(cx - extent));
+    const x1 = Math.min(w - 1, Math.ceil(cx + extent));
+    const y0 = Math.max(0, Math.floor(cy - extent));
+    const y1 = Math.min(h - 1, Math.ceil(cy + extent));
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const d = Math.hypot(x - cx, y - cy) / r;
-        if (d < 1) cur[y * w + x] = (cur[y * w + x] ?? 0) + strength * 0.5 * (1 + Math.cos(Math.PI * d));
+        if (d >= 1.18) continue;
+        // A broad, almost level impact basin with a smooth shoulder.
+        const bowl = 1 - smoothstep(0.28, 1.0, d);
+        // Small raised rim models the water displaced by the impact.
+        const rimDist = (d - 0.88) / 0.19;
+        const rim = Math.exp(-rimDist * rimDist) * 0.24;
+        const profile = bowl - rim;
+        cur[y * w + x] = (cur[y * w + x] ?? 0) + strength * profile;
       }
     }
   }

@@ -39,7 +39,7 @@ void main(){
   float hu = H(uv - vec2(0.0, uTexel.y));
   float hd = H(uv + vec2(0.0, uTexel.y));
   vec2 g = vec2(hr - hl, hd - hu);
-  vec3 n = normalize(vec3(-g * 1.65, 1.0));
+  vec3 n = normalize(vec3(-g * 2.35, 1.0));
   float lap = hl + hr + hu + hd - 4.0 * hc;
 
   // Refracted view of the bottom
@@ -63,20 +63,20 @@ void main(){
   col *= mix(vec3(1.0), absorption, opticalDepth * (0.35 + uLiquidAmt * 0.5));
 
   // Caustics: converging wavefronts focus light
-  float caustic = clamp(-lap * 0.55, 0.0, 1.0);
-  col += caustic * mix(vec3(0.55), tint, 0.6) * 0.55;
+  float caustic = clamp(-lap * 0.92, 0.0, 1.0);
+  col += caustic * mix(vec3(0.62), tint, 0.72) * 0.78;
 
   // Specular highlight
   vec3 L = normalize(vec3(-0.45, -0.55, 0.7));
   vec3 Hv = normalize(L + vec3(0.0, 0.0, 1.0));
   float spec = pow(max(dot(n, Hv), 0.0), 220.0);
-  col += vec3(1.0) * spec * 0.9;
-  float rim = clamp(length(g) * 0.35, 0.0, 1.0);
-  col += vec3(0.12) * rim;
+  col += vec3(1.0) * spec * 1.25;
+  float rim = clamp(length(g) * 0.52, 0.0, 1.0);
+  col += vec3(0.18) * rim;
 
   // Glow: ripples emit light
-  float energy = clamp(abs(hc) * 0.16 + rim * 0.9 + caustic * 0.22, 0.0, 1.2);
-  col += uGlow * uGlowAmt * (energy * 0.75 + caustic * 0.9);
+  float energy = clamp(abs(hc) * 0.22 + rim * 1.15 + caustic * 0.32, 0.0, 1.2);
+  col += uGlow * uGlowAmt * (energy * 0.95 + caustic * 1.2);
 
   o = vec4(col, 1.0);
 }`;

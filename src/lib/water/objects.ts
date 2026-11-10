@@ -84,7 +84,7 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
       t.wakeT -= dt;
       if (sp > 25 && t.wakeT <= 0) {
         t.wakeT = 0.05;
-        sim.disturb(sx, sy, (t.r / cell) * 0.9, -Math.min(1.6, sp * 0.004));
+        sim.disturb(sx, sy, (t.r / cell) * 1.25, -Math.min(2.5, sp * 0.0055));
       }
     } else if (t.kind === "fish") {
       t.wander += (Math.random() - 0.5) * dt * 4;
@@ -111,7 +111,7 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
       t.wakeT -= dt;
       if (t.wakeT <= 0) {
         t.wakeT = 0.18;
-        sim.disturb(sx, sy, 1.6, -0.25 * (Math.hypot(t.vx, t.vy) / 100));
+        sim.disturb(sx, sy, 3.8, -0.42 * (Math.hypot(t.vx, t.vy) / 100));
       }
     } else {
       // Sinking ball / pebble
@@ -133,7 +133,7 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
         t.wakeT -= dt;
         if (sp > 60 && t.wakeT <= 0) {
           t.wakeT = 0.12;
-          sim.disturb(sx, sy, 2, -0.2);
+          sim.disturb(sx, sy, 3.5, -0.32);
         }
       }
     }
@@ -154,7 +154,7 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
 
     // Walls
     const bounce = (v: number) => {
-      if (isFloating(t.kind) && Math.abs(v) > 120) sim.disturb(t.x / cell, t.y / cell, t.r / cell, -Math.min(3, Math.abs(v) * 0.004));
+      if (isFloating(t.kind) && Math.abs(v) > 120) sim.disturb(t.x / cell, t.y / cell, (t.r / cell) * 1.35, -Math.min(4.2, Math.abs(v) * 0.0055));
       return -v * 0.45;
     };
     if (t.x < t.r) { t.x = t.r; if (t.vx < 0) t.vx = bounce(t.vx); }
