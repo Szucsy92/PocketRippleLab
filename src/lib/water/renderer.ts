@@ -21,8 +21,21 @@ uniform vec3 uGlow;
 uniform float uGlowAmt;
 uniform float uAspect;
 uniform float uTime;
+uniform vec3 uShallow;
+uniform vec3 uDeep;
+uniform float uDepth;
+uniform vec2 uLight;
+uniform float uMood;
 
-float H(vec2 p){ return texture(uH, p).r; }
+float ambient(vec2 p){
+  vec2 q = p * vec2(uAspect, 1.0);
+  float amp = uMood == 2.0 ? 1.1 : uMood == 1.0 ? 0.16 : 0.0;
+  return amp * (sin(dot(q, vec2(24.0, 17.0)) + uTime * 1.3)
+    + 0.5 * sin(dot(q, vec2(-36.0, 29.0)) - uTime * 1.7)
+    + 0.22 * sin(dot(q, vec2(67.0, 48.0)) + uTime * 2.2));
+}
+
+float H(vec2 p){ return texture(uH, p).r + ambient(p); }
 
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p){
@@ -39,7 +52,7 @@ void main(){
   float hu = H(uv - vec2(0.0, uTexel.y));
   float hd = H(uv + vec2(0.0, uTexel.y));
   vec2 g = vec2(hr - hl, hd - hu);
-  vec3 n = normalize(vec3(-g * 2.35, 1.0));
+  vec3 n = normalize(vec3(-g * 1.6, 1.0));
   float lap = hl + hr + hu + hd - 4.0 * hc;
 
   // Refracted view of the bottom
@@ -56,29 +69,35 @@ void main(){
   vec4 obj = texture(uObj, ruv);
   bottom = mix(bottom, obj.rgb, obj.a);
 
-  vec3 col = mix(bottom, uLiquid * (0.20 + 0.58 * vign), uLiquidAmt);
-  // Depth absorption: longer optical paths lose red first, like real water.
-  float opticalDepth = clamp(0.22 + length(g) * 1.8, 0.0, 1.0);
-  vec3 absorption = vec3(0.94, 0.985, 1.0);
-  col *= mix(vec3(1.0), absorption, opticalDepth * (0.35 + uLiquidAmt * 0.5));
+  // Beer–Lambert transmission: red attenuates faster with optical path length.
+  float opticalDepth = max(0.04, 0.18 + uDepth * 2.8 - hc * 0.055);
+  vec3 transmission = exp(-vec3(1.45, 0.48, 0.23) * opticalDepth);
+  vec3 waterTint = mix(uDeep, uShallow, exp(-opticalDepth * 0.8));
+  waterTint = mix(waterTint, uLiquid, 0.35);
+  vec3 col = mix(bottom, bottom * transmission + waterTint * (1.0-transmission), uLiquidAmt);
 
   // Caustics: converging wavefronts focus light
   float caustic = clamp(-lap * 0.92, 0.0, 1.0);
-  col += caustic * mix(vec3(0.62), tint, 0.72) * 0.78;
+  col += caustic * mix(vec3(0.65), tint, 0.3) * 0.24;
 
   // Specular highlight
-  vec3 L = normalize(vec3(-0.45, -0.55, 0.7));
-  vec3 Hv = normalize(L + vec3(0.0, 0.0, 1.0));
-  float spec = pow(max(dot(n, Hv), 0.0), 220.0);
-  col += vec3(1.0) * spec * 1.25;
+  vec3 L = normalize(vec3(uLight.x, -uLight.y, 0.48));
+  vec3 V = normalize(vec3((0.5-uv) * vec2(uAspect, 1.0) * 0.65, 1.0));
+  vec3 Hv = normalize(L + V);
+  float spec = pow(max(dot(n, Hv), 0.0), 340.0);
+  // Schlick Fresnel, water's normal-incidence reflectance is about 2%.
+  float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
+  vec3 reflected = mix(vec3(0.12, 0.19, 0.23), vec3(0.7, 0.84, 0.89), clamp(n.y * 0.5 + 0.5, 0.0, 1.0));
+  col = mix(col, reflected, fresnel * 0.8);
+  col += vec3(1.0, 0.98, 0.91) * spec * 1.65;
   float rim = clamp(length(g) * 0.52, 0.0, 1.0);
-  col += vec3(0.18) * rim;
+  col += vec3(0.06) * rim;
 
   // Glow: ripples emit light
   float energy = clamp(abs(hc) * 0.22 + rim * 1.15 + caustic * 0.32, 0.0, 1.2);
   col += uGlow * uGlowAmt * (energy * 0.95 + caustic * 1.2);
 
-  o = vec4(col, 1.0);
+  o = vec4(col / (vec3(1.0) + col * 0.28), 1.0);
 }`;
 
 export class WaterRenderer {
@@ -116,7 +135,7 @@ export class WaterRenderer {
     const loc = gl.getAttribLocation(p, "aPos");
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    for (const n of ["uH", "uObj", "uTexel", "uBg", "uLiquid", "uLiquidAmt", "uGlow", "uGlowAmt", "uAspect", "uTime"])
+    for (const n of ["uH", "uObj", "uTexel", "uBg", "uLiquid", "uLiquidAmt", "uGlow", "uGlowAmt", "uAspect", "uTime", "uShallow", "uDeep", "uDepth", "uLight", "uMood"])
       this.u[n] = gl.getUniformLocation(p, n);
 
     const mk = () => {
@@ -158,6 +177,11 @@ export class WaterRenderer {
     glow: [number, number, number];
     glowAmt: number;
     time: number;
+    shallow: [number, number, number];
+    deep: [number, number, number];
+    depth: number;
+    light: { x: number; y: number };
+    mood: number;
   }) {
     const gl = this.gl;
     const c = gl.canvas as HTMLCanvasElement;
@@ -179,6 +203,11 @@ export class WaterRenderer {
     gl.uniform1f((u["uGlowAmt"] ?? null), opts.glowAmt);
     gl.uniform1f((u["uAspect"] ?? null), c.width / c.height);
     gl.uniform1f((u["uTime"] ?? null), opts.time);
+    gl.uniform3fv(u["uShallow"] ?? null, opts.shallow);
+    gl.uniform3fv(u["uDeep"] ?? null, opts.deep);
+    gl.uniform1f(u["uDepth"] ?? null, opts.depth);
+    gl.uniform2f(u["uLight"] ?? null, opts.light.x, opts.light.y);
+    gl.uniform1f(u["uMood"] ?? null, opts.mood);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 }
