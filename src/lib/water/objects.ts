@@ -73,10 +73,11 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
 
     if (isFloating(t.kind)) {
       const [gx, gy] = sim.gradient(sx, sy);
+      const [flowX, flowY] = sim.flow(sx, sy);
       // Water pushes floaters downhill; tilt slides them.
       const push = t.kind === "boat" ? 2600 : 2000;
-      ax = -gx * push + tilt.x * G * 0.55;
-      ay = -gy * push + tilt.y * G * 0.55;
+      ax = -gx * push + tilt.x * G * 0.55 + flowX * cell * 9;
+      ay = -gy * push + tilt.y * G * 0.55 + flowY * cell * 9;
       drag = t.kind === "boat" ? 0.9 : 1.3;
       t.lift += (sim.sample(sx, sy) - t.lift) * Math.min(1, dt * 12);
       // Floaters push water back: a wake when moving, a slight dip from weight.

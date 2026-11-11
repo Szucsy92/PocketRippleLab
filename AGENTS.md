@@ -31,3 +31,5 @@ use the editor.
 
 - Keep water rendering and object motion browser-side in the water modules; device sensors and drawing require browser APIs.
 - Fullscreen is an immersive display mode, not an OS child lock; device-level access restrictions must remain explicit.
+- Keep mood parameters in water settings and adaptive rain in a pure water module; this makes behavior testable independently of rendering.
+- Model finger currents as bounded, decaying tangential fields alongside the height-field solver; this couples object drift to touch without destabilizing wave propagation.
