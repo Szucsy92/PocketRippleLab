@@ -56,7 +56,7 @@ void main(){
   float lap = hl + hr + hu + hd - 4.0 * hc;
 
   // Refracted view of the bottom
-  vec2 ruv = clamp(uv + n.xy * vec2(1.0, uAspect) * 0.072, vec2(0.001), vec2(0.999));
+  vec2 ruv = clamp(uv + n.xy * vec2(1.0, uAspect) * (0.025 + uDepth * 0.09), vec2(0.001), vec2(0.999));
   vec2 q = ruv * vec2(uAspect, 1.0);
 
   float vign = 1.0 - smoothstep(0.25, 1.05, length((ruv - 0.5) * vec2(uAspect, 1.0) * 1.3));
@@ -75,6 +75,8 @@ void main(){
   vec3 waterTint = mix(uDeep, uShallow, exp(-opticalDepth * 0.8));
   waterTint = mix(waterTint, uLiquid, 0.35);
   vec3 col = mix(bottom, bottom * transmission + waterTint * (1.0-transmission), uLiquidAmt);
+  // Clear water stays untinted; its depth still changes light loss and refraction.
+  col *= mix(vec3(1.0), exp(-vec3(0.16, 0.07, 0.035) * opticalDepth), 1.0-uLiquidAmt);
 
   // Caustics: converging wavefronts focus light
   float caustic = clamp(-lap * 0.92, 0.0, 1.0);
