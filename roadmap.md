@@ -1,2 +1,3 @@
+- [ ] Implement and verify clear-water optics, three moods, adaptive rain, swirling currents, and live light/depth controls without sound.
 - [x] Finish the water game's appearance and verify touch, objects, and settings.
 - [x] Suggest the next step after remixing: try it on a real phone, especially tilt and OS child lock.
