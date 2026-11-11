@@ -215,3 +215,48 @@ button, input { font: inherit; }
 @media (max-width: 520px) { .sheet { width: 100%; border-left: 0; border-radius: 22px 22px 0 0; padding-left: 22px; padding-right: 22px; } .sheet-veil { align-items: flex-end; } }
 @media (prefers-reduced-motion: reduce) { .sheet-veil, .sheet { animation: none; } .btn-neon, .btn-ghost, .thing-btn, .swatch { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .toggle > span { transition: none; } }
+
+/* Mood selection and unobstructed, live optical controls. */
+:root {
+  --mood-shade: oklch(0.08 0.015 200 / 0.78);
+  --light-disk: oklch(0.25 0.025 200);
+  --light-orbit: oklch(0.72 0.035 190 / 0.25);
+  --light-sun: oklch(0.94 0.08 95);
+  --control-field: oklch(0.12 0.015 230 / 0.5);
+}
+.mood-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.mood-card { position: relative; height: 118px; min-width: 0; width: 100%; border-radius: 8px; padding: 0; overflow: hidden; border: 1px solid var(--border); display: block; }
+.mood-card img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s ease; }
+.mood-card:hover img { transform: scale(1.04); }
+.mood-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 30%, var(--mood-shade)); }
+.mood-card > span { position: absolute; left: 6px; right: 6px; bottom: 10px; z-index: 1; text-align: center; color: var(--foreground); font-size: 12px; font-weight: 650; line-height: 1.35; white-space: normal; }
+.mood-card[aria-pressed='true'] { border: 2px solid var(--primary); outline: 2px solid var(--primary); outline-offset: 2px; }
+.rain-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border: 1px solid var(--border); padding: 4px; border-radius: 8px; }
+.rain-mode > button { min-width: 0; border-radius: 4px; color: var(--muted-foreground); }
+.rain-mode > button[aria-pressed='true'] { background: var(--accent); color: var(--foreground); }
+.light-layout { display: grid; grid-template-columns: 160px minmax(0, 1fr); align-items: center; gap: 20px; }
+.light-disk { width: 160px; height: 160px; padding: 0; border-radius: 50%; touch-action: none; background: var(--light-disk); border: 1px solid var(--border); cursor: crosshair; }
+.light-disk:hover { background: var(--light-disk); }
+.light-disk svg { width: 100%; height: 100%; }
+.disk-orbit { fill: none; stroke: var(--light-orbit); stroke-dasharray: 2 5; }
+.disk-axis { fill: none; stroke: var(--light-orbit); }
+.disk-ray { stroke: var(--primary); stroke-width: 1; opacity: .5; }
+.disk-center { fill: var(--muted-foreground); }
+.disk-sun { fill: var(--light-sun); }
+.numeric-label { display: grid; gap: 4px; font-size: 12px; color: var(--muted-foreground); }
+.numeric-label input, .depth-value input { width: 100%; min-width: 0; height: 34px; border: 1px solid var(--border); border-radius: 6px; background: var(--control-field); color: var(--foreground); padding: 4px 8px; font-size: 14px; }
+.depth-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.depth-value { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.depth-value input { width: 65px; }
+.sheet-veil[data-preview] { background: transparent; backdrop-filter: none; }
+.sheet-veil[data-preview] .sheet { background: transparent; box-shadow: none; border-color: transparent; overflow-y: hidden; }
+.sheet-veil[data-preview] .sheet > * { opacity: 0; pointer-events: none; }
+.sheet-veil[data-preview='light'] [data-control='light'], .sheet-veil[data-preview='depth'] [data-control='depth'] { opacity: 1; border-color: transparent; }
+.sheet-veil[data-preview='light'] [data-control='light'] h3, .sheet-veil[data-preview='light'] .light-values,
+.sheet-veil[data-preview='depth'] .depth-heading { visibility: hidden; }
+.sheet-veil[data-preview] .live-control { opacity: .45; pointer-events: auto; }
+.sheet-veil[data-preview] .light-disk { background: transparent; }
+.sheet-veil .sheet { max-height: 100%; }
+body, .sheet h2 { letter-spacing: 0; }
+@media (max-width: 380px) { .light-layout { grid-template-columns: 144px minmax(0, 1fr); gap: 16px; } .light-disk { width: 144px; height: 144px; } }
+@media (prefers-reduced-motion: reduce) { .mood-card img { transition: none; } }

@@ -2,12 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { WaterSim } from "@/lib/water/sim";
 import { WaterRenderer } from "@/lib/water/renderer";
 import { Tilt } from "@/lib/water/tilt";
+import { Rainfall } from "@/lib/water/rain";
 import { drawSurface, drawUnder, isFloating, makeThing, updateThings, type Kind, type World } from "@/lib/water/objects";
 import {
   BACKGROUNDS,
   GLOWS,
   LIQUIDS,
   SETTINGS_HOLD_MS,
+  WATER_COLORS,
+  clampSettings,
   dampingFor,
   hexToRgb,
   loadSettings,
@@ -40,7 +43,8 @@ export function WaterApp() {
 
   const update = (patch: Partial<Settings>) => {
     setSettings((prev) => {
-      const next = { ...(prev as Settings), ...patch };
+      if (!prev) return prev;
+      const next = clampSettings({ ...prev, ...patch });
       settingsRef.current = next;
       saveSettings(next);
       return next;
@@ -66,6 +70,8 @@ export function WaterApp() {
     tilt.start();
 
     let sim = new WaterSim(2, 2);
+    const rain = new Rainfall();
+    let activeMood: Settings["mood"] = null;
     const world: World = { things: [], width: 1, height: 1, cell: 1, tilt: tilt.value, touches: [] };
     let dpr = 1;
     let underScale = 1;
@@ -136,7 +142,10 @@ export function WaterApp() {
         }
       }
       pointers.set(e.pointerId, { x, y, t: performance.now(), grab });
-      if (grab === null) sim.disturb(toSim(x), toSim(y), 8.5, -7.5);
+      if (grab === null) {
+        sim.disturb(toSim(x), toSim(y), 8.5, settingsRef.current?.mood === "ocean" ? -9 : -5.5);
+        rain.touch(0.12);
+      }
     };
     const onMove = (e: PointerEvent) => {
       const p = pointers.get(e.pointerId);
@@ -162,6 +171,8 @@ export function WaterApp() {
         const stepPx = world.cell * 1.5;
         const n = Math.max(1, Math.ceil(dist / stepPx));
         const speed = dist / dt;
+        rain.touch(Math.min(0.12, dist * 0.001));
+        sim.swirl(toSim(x), toSim(y), toSim(dx), toSim(dy));
         const s = -Math.min(3.2, 0.4 + speed * 0.0017);
         for (let i = 1; i <= n; i++) {
           const f = i / n;
@@ -204,6 +215,23 @@ export function WaterApp() {
       if (s) {
         tilt.update(dt, s.tiltZero, s.tiltOn);
         sim.damping = dampingFor(s.waveLife);
+        sim.ageCurrents(dt);
+        if (activeMood !== s.mood) {
+          sim.clear();
+          rain.reset();
+          activeMood = s.mood;
+          lastPlane = { x: 0, y: 0 };
+        }
+        if (s.mood === "rain") {
+          const drops = rain.step(dt, s.rainMode, pointers.size > 0);
+          for (let i = 0; i < drops; i++) {
+            sim.disturb(Math.random() * sim.w, Math.random() * sim.h, 2.2 + Math.random() * 1.5, -0.7 - Math.random() * 0.55);
+          }
+        }
+        if (s.mood === "ocean" && Math.random() < dt * 3) {
+          const fromSide = Math.random() < 0.5;
+          sim.disturb(fromSide ? 0 : sim.w - 1, Math.random() * sim.h, 18 + Math.random() * 12, -1.8);
+        }
 
         // Tilt the resting surface: the water sloshes toward the low side.
         const PK = 0.035;
@@ -240,10 +268,15 @@ export function WaterApp() {
           height: sim.cur,
           bg: hexToRgb(BACKGROUNDS[s.bg]?.hex ?? "#0a0a14"),
           liquid: liq.hex === "transparent" ? [0, 0, 0] : hexToRgb(liq.hex),
-          liquidAmt: liq.hex === "transparent" ? 0 : 0.42,
+          liquidAmt: liq.hex === "transparent" ? 0 : WATER_COLORS.opacity,
           glow: hexToRgb(GLOWS[s.glowColor]?.hex ?? "#36f1cd"),
           glowAmt: s.glowOn ? s.glowAmount * 1.65 : 0,
           time: (now - start) / 1000,
+          shallow: hexToRgb(WATER_COLORS.shallow),
+          deep: hexToRgb(WATER_COLORS.deep),
+          depth: s.depth,
+          light: s.light,
+          mood: s.mood === "ocean" ? 2 : s.mood === "stream" ? 1 : 0,
         });
       }
       raf = requestAnimationFrame(frame);

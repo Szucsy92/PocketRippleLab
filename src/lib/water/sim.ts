@@ -13,7 +13,8 @@ export class WaterSim {
   h: number;
   cur: Float32Array;
   prev: Float32Array;
-  damping = 0.99;
+  damping = 0.994;
+  private currents: { x: number; y: number; radius: number; strength: number; age: number }[] = [];
 
   constructor(w: number, h: number) {
     this.w = w;
@@ -70,6 +71,36 @@ export class WaterSim {
     }
   }
 
+  /** A localized tangential current accompanies a moving finger, without foam. */
+  swirl(x: number, y: number, dx: number, dy: number) {
+    const speed = Math.hypot(dx, dy);
+    if (speed < 0.05) return;
+    const sign = dx + dy >= 0 ? 1 : -1;
+    this.currents.push({ x, y, radius: 20, strength: sign * Math.min(20, speed * 0.9), age: 0 });
+    if (this.currents.length > 48) this.currents.shift();
+    const nx = -dy / speed;
+    const ny = dx / speed;
+    const force = Math.min(0.5, speed * 0.025);
+    this.disturb(x + nx * 4, y + ny * 4, 5, force);
+    this.disturb(x - nx * 4, y - ny * 4, 5, -force);
+  }
+
+  ageCurrents(dt: number) {
+    for (const current of this.currents) current.age += dt;
+    this.currents = this.currents.filter((c) => c.age < 3.5);
+  }
+
+  flow(x: number, y: number): [number, number] {
+    let vx = 0, vy = 0;
+    for (const c of this.currents) {
+      const dx = x - c.x, dy = y - c.y;
+      const falloff = Math.exp(-(dx * dx + dy * dy) / (c.radius * c.radius) - c.age * 1.4);
+      vx -= dy / c.radius * c.strength * falloff;
+      vy += dx / c.radius * c.strength * falloff;
+    }
+    return [vx, vy];
+  }
+
   /** Tilt: the resting surface becomes a plane; shifting it releases slosh from the edges. */
   shiftPlane(dx: number, dy: number) {
     const { w, h, cur } = this;
@@ -105,5 +136,6 @@ export class WaterSim {
   clear() {
     this.cur.fill(0);
     this.prev.fill(0);
+    this.currents = [];
   }
 }
