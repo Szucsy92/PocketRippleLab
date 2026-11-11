@@ -16,7 +16,7 @@ export function WaterLightControls({ settings: s, onChange, onPreview }: {
         <h3 className="font-display text-sm text-muted-foreground uppercase">Fény iránya</h3>
         <div className="light-layout">
           <Button variant="ghost" className="light-disk live-control" aria-label="Fény iránya" title="Fény iránya"
-            onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); onPreview("light"); moveLight(e); }}
+            onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); onPreview("light"); moveLight(e); }}
             onPointerMove={(e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) moveLight(e); }}
             onPointerUp={() => onPreview(null)} onPointerCancel={() => onPreview(null)} onLostPointerCapture={() => onPreview(null)}
             onKeyDown={(e) => {
