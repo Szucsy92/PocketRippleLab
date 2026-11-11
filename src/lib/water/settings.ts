@@ -22,12 +22,12 @@ export const GLOWS: Swatch[] = LIQUIDS.slice(1).concat({ name: "Hold", hex: "#9a
 export const SETTINGS_HOLD_MS = 3000;
 
 export const WATER_COLORS = { shallow: "#7fffd4", deep: "#003366", opacity: 0.85 };
-export type Mood = "stream" | "ocean" | "rain";
+export type Mood = "pool" | "sea" | "lake";
 export type RainMode = "auto" | "touch";
 export const MOODS: { id: Mood; label: string; settings: Partial<Settings> }[] = [
-  { id: "stream", label: "Hegyi patak", settings: { bg: 1, liquid: 1, waveSpeed: 1, waveLife: 0.85, depth: 0.2, glowOn: false } },
-  { id: "ocean", label: "Viharos óceán", settings: { bg: 1, liquid: 1, waveSpeed: 2.75, waveLife: 0.8, depth: 0.85, glowOn: false } },
-  { id: "rain", label: "Esős nap", settings: { bg: 1, liquid: 0, waveSpeed: 1.5, waveLife: 0.75, depth: 0.45, glowOn: false, rainMode: "auto" } },
+  { id: "pool", label: "Medence", settings: { bg: 1, liquid: 0, glowOn: false } },
+  { id: "lake", label: "Tavacska", settings: { bg: 4, liquid: 0, glowOn: false } },
+  { id: "sea", label: "Tengerfenék", settings: { bg: 1, liquid: 1, glowOn: false } },
 ];
 
 export function applyMood(s: Settings, mood: Mood): Settings {
@@ -61,13 +61,13 @@ export const DEFAULT_SETTINGS: Settings = {
   glowOn: true,
   glowAmount: 0.55,
   glowColor: 0,
-  waveSpeed: 2,
-  waveLife: 0.6,
+  waveSpeed: 1,
+  waveLife: 1,
   tiltOn: true,
   tiltZero: { x: 0, y: 0 },
   mood: null,
   rainMode: "auto",
-  depth: 0.35,
+  depth: 1,
   light: { x: -0.45, y: -0.55 },
 };
 

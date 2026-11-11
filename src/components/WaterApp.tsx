@@ -143,7 +143,7 @@ export function WaterApp() {
       }
       pointers.set(e.pointerId, { x, y, t: performance.now(), grab });
       if (grab === null) {
-        sim.disturb(toSim(x), toSim(y), 8.5, settingsRef.current?.mood === "ocean" ? -9 : -5.5);
+        sim.disturb(toSim(x), toSim(y), 8.5, -5.5);
         rain.touch(0.12);
       }
     };
@@ -207,6 +207,9 @@ export function WaterApp() {
     let last = performance.now();
     let acc = 0;
     let lastPlane = { x: 0, y: 0 };
+    let slosh = 0;
+    let lightGlow = 0;
+    let lastLight = { x: 0, y: 0 };
     const start = last;
     const frame = (now: number) => {
       const s = settingsRef.current;
@@ -222,17 +225,6 @@ export function WaterApp() {
           activeMood = s.mood;
           lastPlane = { x: 0, y: 0 };
         }
-        if (s.mood === "rain") {
-          const drops = rain.step(dt, s.rainMode, pointers.size > 0);
-          for (let i = 0; i < drops; i++) {
-            sim.disturb(Math.random() * sim.w, Math.random() * sim.h, 2.2 + Math.random() * 1.5, -0.7 - Math.random() * 0.55);
-          }
-        }
-        if (s.mood === "ocean" && Math.random() < dt * 3) {
-          const fromSide = Math.random() < 0.5;
-          sim.disturb(fromSide ? 0 : sim.w - 1, Math.random() * sim.h, 18 + Math.random() * 12, -1.8);
-        }
-
         // Tilt the resting surface: the water sloshes toward the low side.
         const PK = 0.035;
         const px = tilt.value.x * PK;
@@ -241,9 +233,14 @@ export function WaterApp() {
         const ddy = Math.max(-0.004, Math.min(0.004, py - lastPlane.y));
         if (Math.abs(ddx) + Math.abs(ddy) > 1e-5) {
           sim.shiftPlane(ddx, ddy);
+          slosh = Math.min(1, slosh + (Math.abs(ddx) + Math.abs(ddy)) * 160);
           lastPlane = { x: lastPlane.x + ddx, y: lastPlane.y + ddy };
         }
 
+        slosh *= Math.exp(-dt * 1.6);
+        if (Math.abs(s.light.x - lastLight.x) + Math.abs(s.light.y - lastLight.y) > 1e-4) lightGlow = 1;
+        else lightGlow *= Math.exp(-dt * 1.2);
+        lastLight = s.light;
         world.touches = [...pointers.values()].filter((p) => p.grab === null);
         updateThings(world, sim, dt);
 
@@ -276,7 +273,9 @@ export function WaterApp() {
           deep: hexToRgb(WATER_COLORS.deep),
           depth: s.depth,
           light: s.light,
-          mood: s.mood === "ocean" ? 2 : s.mood === "stream" ? 1 : 0,
+          mood: s.mood === "sea" ? 1 : s.mood === "lake" ? 2 : 0,
+          slosh: s.tiltOn ? slosh : 0,
+          lightGlow,
         });
       }
       raf = requestAnimationFrame(frame);

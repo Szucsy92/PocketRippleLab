@@ -3,11 +3,11 @@ import { Button } from "./ui/button";
 import { BACKGROUNDS, GLOWS, LIQUIDS, MOODS, applyMood, type Settings, type Swatch } from "@/lib/water/settings";
 import type { Kind } from "@/lib/water/objects";
 import { WaterLightControls } from "./WaterLightControls";
-import streamImage from "@/assets/mountain-stream.jpg";
-import oceanImage from "@/assets/storm-ocean.jpg";
-import rainImage from "@/assets/rainy-day.jpg";
+import poolImage from "@/assets/pool-floor.jpg";
+import seaImage from "@/assets/sea-floor.jpg";
+import lakeImage from "@/assets/lake-floor.jpg";
 
-const MOOD_IMAGES = { stream: streamImage, ocean: oceanImage, rain: rainImage };
+const MOOD_IMAGES = { pool: poolImage, sea: seaImage, lake: lakeImage };
 
 const THINGS: { kind: Kind; label: string; icon: string }[] = [
   { kind: "duck", label: "Kacsa", icon: "🦆" },
@@ -83,7 +83,7 @@ export function SettingsPanel(props: {
           <Button variant="ghost" onClick={props.onClose} className="btn-ghost">Kész</Button>
         </div>
 
-        <Section title="Hangulat">
+        <Section title="Világ">
           <div className="mood-grid">
             {MOODS.map((m) => (
               <Button key={m.id} variant="ghost" className="mood-card" aria-pressed={s.mood === m.id}
@@ -93,12 +93,6 @@ export function SettingsPanel(props: {
               </Button>
             ))}
           </div>
-          {s.mood === "rain" && (
-            <div className="rain-mode" role="group" aria-label="Esőzés">
-              <Button variant="ghost" aria-pressed={s.rainMode === "auto"} onClick={() => onChange({ rainMode: "auto" })}>Automata</Button>
-              <Button variant="ghost" aria-pressed={s.rainMode === "touch"} onClick={() => onChange({ rainMode: "touch" })}>Érintésre</Button>
-            </div>
-          )}
         </Section>
 
         <WaterLightControls settings={s} onChange={onChange} onPreview={setPreview} />

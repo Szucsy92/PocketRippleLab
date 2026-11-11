@@ -26,10 +26,12 @@ uniform vec3 uDeep;
 uniform float uDepth;
 uniform vec2 uLight;
 uniform float uMood;
+uniform float uSlosh;
+uniform float uLightGlow;
 
 float ambient(vec2 p){
   vec2 q = p * vec2(uAspect, 1.0);
-  float amp = uMood == 2.0 ? 1.1 : uMood == 1.0 ? 0.16 : 0.0;
+  float amp = uMood == 1.0 ? 0.22 : uMood == 2.0 ? 0.05 : 0.0;
   return amp * (sin(dot(q, vec2(24.0, 17.0)) + uTime * 1.3)
     + 0.5 * sin(dot(q, vec2(-36.0, 29.0)) - uTime * 1.7)
     + 0.22 * sin(dot(q, vec2(67.0, 48.0)) + uTime * 2.2));
@@ -60,11 +62,49 @@ void main(){
   vec2 q = ruv * vec2(uAspect, 1.0);
 
   float vign = 1.0 - smoothstep(0.25, 1.05, length((ruv - 0.5) * vec2(uAspect, 1.0) * 1.3));
-  vec3 bottom = uBg * (0.55 + 0.9 * vign);
-  float sand = vnoise(q * 9.0) * 0.6 + vnoise(q * 23.0) * 0.4;
-  bottom += vec3(0.022) * sand * (0.5 + vign);
+  vec3 bottom;
+  if (uMood == 0.0) {
+    // Pool: straight, clean tiled floor parallel to the screen.
+    vec2 t = q * 7.0;
+    vec2 f = abs(fract(t) - 0.5);
+    float grout = smoothstep(0.47, 0.495, max(f.x, f.y));
+    float tileVar = hash(floor(t)) * 0.06;
+    bottom = vec3(0.5, 0.78, 0.86) * (0.62 + tileVar) - grout * vec3(0.18, 0.2, 0.2);
+  } else if (uMood == 1.0) {
+    // Seabed: golden sand ridges.
+    float ridge = sin(q.x * 38.0 + vnoise(q * 4.0) * 6.0 + q.y * 9.0) * 0.5 + 0.5;
+    float grain = vnoise(q * 60.0);
+    bottom = mix(vec3(0.58, 0.48, 0.3), vec3(0.82, 0.7, 0.46), ridge * 0.7 + grain * 0.3);
+  } else if (uMood == 2.0) {
+    // Lake: pebbles and moss.
+    vec2 c = q * 11.0;
+    vec2 cell = floor(c);
+    float d = 9.0; float id = 0.0;
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+      vec2 o2 = cell + vec2(i, j);
+      vec2 pt = o2 + vec2(hash(o2), hash(o2 + 7.3)) * 0.8 + 0.1;
+      float dd = length(c - pt);
+      if (dd < d) { d = dd; id = hash(o2 + 3.1); }
+    }
+    vec3 stone = mix(vec3(0.42, 0.36, 0.28), vec3(0.62, 0.56, 0.46), id);
+    vec3 moss = vec3(0.2, 0.3, 0.14);
+    bottom = mix(stone, moss, smoothstep(0.35, 0.6, d) * 0.85) * (0.8 + vnoise(q * 30.0) * 0.3);
+  } else {
+    bottom = uBg * (0.55 + 0.9 * vign);
+    float sand = vnoise(q * 9.0) * 0.6 + vnoise(q * 23.0) * 0.4;
+    bottom += vec3(0.022) * sand * (0.5 + vign);
+  }
+  if (uMood >= 0.0 && uMood <= 2.0) bottom *= mix(0.55, 1.0, vign) * mix(1.0, 0.55, uDepth);
   vec3 tint = uLiquidAmt > 0.0 ? uLiquid : uGlow;
   bottom += tint * 0.035 * vnoise(q * 3.0 + uTime * 0.03);
+  // Sun net: drifting caustic pattern on the floor, stronger while moving the light.
+  float net = 0.0;
+  {
+    vec2 cq = q * 5.0 + uLight * 0.6;
+    float a1 = vnoise(cq + uTime * 0.25), a2 = vnoise(cq * 1.7 - uTime * 0.2);
+    net = pow(1.0 - abs(a1 - a2) * 2.0, 8.0);
+  }
+  bottom += vec3(1.0, 0.97, 0.85) * net * (0.08 + uLightGlow * 0.35) * mix(1.0, 0.4, uDepth);
 
   vec4 obj = texture(uObj, ruv);
   bottom = mix(bottom, obj.rgb, obj.a);
@@ -91,13 +131,23 @@ void main(){
   float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
   vec3 reflected = mix(vec3(0.12, 0.19, 0.23), vec3(0.7, 0.84, 0.89), clamp(n.y * 0.5 + 0.5, 0.0, 1.0));
   col = mix(col, reflected, fresnel * 0.8);
-  col += vec3(1.0, 0.98, 0.91) * spec * 1.65;
+  col += vec3(1.0, 0.98, 0.91) * spec * (1.65 + uLightGlow * 2.5);
+  float spark = pow(max(dot(n, Hv), 0.0), 2200.0);
+  col += vec3(1.0) * spark * (0.6 + uLightGlow * 4.0);
   float rim = clamp(length(g) * 0.52, 0.0, 1.0);
   col += vec3(0.06) * rim;
 
   // Glow: ripples emit light
   float energy = clamp(abs(hc) * 0.22 + rim * 1.15 + caustic * 0.32, 0.0, 1.2);
   col += uGlow * uGlowAmt * (energy * 0.95 + caustic * 1.2);
+
+  // Edge foam while the water sloshes against the walls.
+  vec2 e = min(uv, 1.0 - uv) * vec2(uAspect, 1.0);
+  float edge = 1.0 - smoothstep(0.0, 0.07, min(e.x, e.y));
+  float crest = smoothstep(0.4, 2.2, abs(hc) + length(g) * 2.0);
+  float foamN = vnoise(uv * vec2(uAspect, 1.0) * 70.0 + uTime * 0.6) * vnoise(uv * 140.0 - uTime * 0.4);
+  float foam = clamp(edge * crest * uSlosh * smoothstep(0.12, 0.45, foamN) * 2.2, 0.0, 0.9);
+  col = mix(col, vec3(0.94, 0.97, 0.98), foam);
 
   o = vec4(col / (vec3(1.0) + col * 0.28), 1.0);
 }`;
@@ -137,7 +187,7 @@ export class WaterRenderer {
     const loc = gl.getAttribLocation(p, "aPos");
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    for (const n of ["uH", "uObj", "uTexel", "uBg", "uLiquid", "uLiquidAmt", "uGlow", "uGlowAmt", "uAspect", "uTime", "uShallow", "uDeep", "uDepth", "uLight", "uMood"])
+    for (const n of ["uH", "uObj", "uTexel", "uBg", "uLiquid", "uLiquidAmt", "uGlow", "uGlowAmt", "uAspect", "uTime", "uShallow", "uDeep", "uDepth", "uLight", "uMood", "uSlosh", "uLightGlow"])
       this.u[n] = gl.getUniformLocation(p, n);
 
     const mk = () => {
@@ -184,6 +234,8 @@ export class WaterRenderer {
     depth: number;
     light: { x: number; y: number };
     mood: number;
+    slosh: number;
+    lightGlow: number;
   }) {
     const gl = this.gl;
     const c = gl.canvas as HTMLCanvasElement;
@@ -210,6 +262,8 @@ export class WaterRenderer {
     gl.uniform1f(u["uDepth"] ?? null, opts.depth);
     gl.uniform2f(u["uLight"] ?? null, opts.light.x, opts.light.y);
     gl.uniform1f(u["uMood"] ?? null, opts.mood);
+    gl.uniform1f(u["uSlosh"] ?? null, opts.slosh);
+    gl.uniform1f(u["uLightGlow"] ?? null, opts.lightGlow);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 }

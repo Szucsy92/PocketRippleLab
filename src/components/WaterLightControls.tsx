@@ -26,13 +26,7 @@ export function WaterLightControls({ settings: s, onChange, onPreview }: {
               e.preventDefault();
               onChange({ light: lightFromDisk(s.light.x + delta[0], s.light.y + delta[1]) });
             }}>
-            <svg viewBox="0 0 160 160" aria-hidden="true">
-              <circle className="disk-orbit" cx="80" cy="80" r="46" />
-              <path className="disk-axis" d="M80 12V148M12 80H148" />
-              <line className="disk-ray" x1="80" y1="80" x2={80 + s.light.x * 62} y2={80 + s.light.y * 62} />
-              <circle className="disk-center" cx="80" cy="80" r="3" />
-              <circle className="disk-sun" cx={80 + s.light.x * 62} cy={80 + s.light.y * 62} r="9" />
-            </svg>
+            <span className="sun-orb" aria-hidden="true" style={{ left: `${50 + s.light.x * 38}%`, top: `${50 + s.light.y * 38}%` }} />
           </Button>
           <div className="light-values space-y-3">
             <label className="numeric-label">Vízszintes

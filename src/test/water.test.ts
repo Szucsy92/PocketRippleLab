@@ -8,25 +8,14 @@ describe("Water rules", () => {
   it("offers no more than five liquid choices", () => expect(LIQUIDS.length).toBeLessThanOrEqual(5));
   it("defaults to transparent water", () => expect(LIQUIDS[DEFAULT_SETTINGS.liquid]?.hex).toBe("transparent"));
   it("requires a three-second hold", () => expect(SETTINGS_HOLD_MS).toBe(3000));
-  it("offers the three agreed moods", () => expect(MOODS.map((m) => m.id)).toEqual(["stream", "ocean", "rain"]));
-  it("sets shallow slow long-lived stream water", () => {
-    const stream = applyMood(DEFAULT_SETTINGS, "stream");
-    expect(stream.depth).toBe(0.2);
-    expect(stream.waveSpeed).toBe(1);
-    expect(stream.waveLife).toBe(0.85);
+  it("offers pool, lake and seabed worlds", () => expect(MOODS.map((m) => m.id).sort()).toEqual(["lake", "pool", "sea"]));
+  it("defaults to maximum depth, slowest speed and longest waves", () => {
+    expect(DEFAULT_SETTINGS.depth).toBe(1);
+    expect(DEFAULT_SETTINGS.waveSpeed).toBe(1);
+    expect(DEFAULT_SETTINGS.waveLife).toBe(1);
   });
-  it("sets deep fast ocean water", () => {
-    const ocean = applyMood(DEFAULT_SETTINGS, "ocean");
-    expect(ocean.depth).toBe(0.85);
-    expect(ocean.waveSpeed).toBe(2.75);
-  });
+  it("keeps the chosen depth when switching worlds", () => expect(applyMood({ ...DEFAULT_SETTINGS, depth: 0.4 }, "sea").depth).toBe(0.4));
   it("uses the specified optical colors", () => expect(WATER_COLORS).toEqual({ shallow: "#7fffd4", deep: "#003366", opacity: 0.85 }));
-  it("starts gentle rain automatically when its mood is selected", () => {
-    const rainy = applyMood({ ...DEFAULT_SETTINGS, rainMode: "touch" }, "rain");
-    expect(rainy.rainMode).toBe("auto");
-    const rain = new Rainfall();
-    expect(rain.step(1, rainy.rainMode, false)).toBe(5);
-  });
   it("keeps touch-only rain dry when not touched", () => {
     const rain = new Rainfall();
     rain.touch(1);
