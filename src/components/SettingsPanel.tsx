@@ -1,7 +1,13 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "./ui/button";
-import { BACKGROUNDS, GLOWS, LIQUIDS, type Settings, type Swatch } from "@/lib/water/settings";
+import { BACKGROUNDS, GLOWS, LIQUIDS, MOODS, applyMood, type Settings, type Swatch } from "@/lib/water/settings";
 import type { Kind } from "@/lib/water/objects";
+import { WaterLightControls } from "./WaterLightControls";
+import streamImage from "@/assets/mountain-stream.jpg";
+import oceanImage from "@/assets/storm-ocean.jpg";
+import rainImage from "@/assets/rainy-day.jpg";
+
+const MOOD_IMAGES = { stream: streamImage, ocean: oceanImage, rain: rainImage };
 
 const THINGS: { kind: Kind; label: string; icon: string }[] = [
   { kind: "duck", label: "Kacsa", icon: "🦆" },
@@ -68,13 +74,34 @@ export function SettingsPanel(props: {
   onClose: () => void;
 }) {
   const { settings: s, onChange } = props;
+  const [preview, setPreview] = useState<"light" | "depth" | null>(null);
   return (
-    <div className="sheet-veil" onPointerDown={(e) => e.target === e.currentTarget && props.onClose()}>
-      <div className="sheet">
+    <div className="sheet-veil" data-preview={preview ?? undefined} onPointerDown={(e) => !preview && e.target === e.currentTarget && props.onClose()}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Beállítások">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-2xl text-primary text-glow">Beállítások</h2>
           <Button variant="ghost" onClick={props.onClose} className="btn-ghost">Kész</Button>
         </div>
+
+        <Section title="Hangulat">
+          <div className="mood-grid">
+            {MOODS.map((m) => (
+              <Button key={m.id} variant="ghost" className="mood-card" aria-pressed={s.mood === m.id}
+                onClick={() => onChange(applyMood(s, m.id))}>
+                <img src={MOOD_IMAGES[m.id]} alt="" width={768} height={512} loading="lazy" />
+                <span>{m.label}</span>
+              </Button>
+            ))}
+          </div>
+          {s.mood === "rain" && (
+            <div className="rain-mode" role="group" aria-label="Esőzés">
+              <Button variant="ghost" aria-pressed={s.rainMode === "auto"} onClick={() => onChange({ rainMode: "auto" })}>Automata</Button>
+              <Button variant="ghost" aria-pressed={s.rainMode === "touch"} onClick={() => onChange({ rainMode: "touch" })}>Érintésre</Button>
+            </div>
+          )}
+        </Section>
+
+        <WaterLightControls settings={s} onChange={onChange} onPreview={setPreview} />
 
         <Section title="Tegyél valamit a vízbe">
           <div className="grid grid-cols-5 gap-2">
