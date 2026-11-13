@@ -28,6 +28,7 @@ uniform vec2 uLight;
 uniform float uMood;
 uniform float uSlosh;
 uniform float uLightGlow;
+uniform vec2 uParallax;
 
 float ambient(vec2 p){
   vec2 q = p * vec2(uAspect, 1.0);
@@ -58,7 +59,7 @@ void main(){
   float lap = hl + hr + hu + hd - 4.0 * hc;
 
   // Refracted view of the bottom
-  vec2 ruv = clamp(uv + n.xy * vec2(1.0, uAspect) * (0.025 + uDepth * 0.09), vec2(0.001), vec2(0.999));
+  vec2 ruv = clamp(uv + uParallax * (0.25 + uDepth) * vec2(1.0, uAspect) * 0.04 + n.xy * vec2(1.0, uAspect) * (0.025 + uDepth * 0.09), vec2(0.001), vec2(0.999));
   vec2 q = ruv * vec2(uAspect, 1.0);
 
   float vign = 1.0 - smoothstep(0.25, 1.05, length((ruv - 0.5) * vec2(uAspect, 1.0) * 1.3));
@@ -102,7 +103,7 @@ void main(){
   {
     vec2 cq = q * 5.0 + uLight * 0.6;
     float a1 = vnoise(cq + uTime * 0.25), a2 = vnoise(cq * 1.7 - uTime * 0.2);
-    net = pow(1.0 - abs(a1 - a2) * 2.0, 8.0);
+    net = pow(clamp(1.0 - abs(a1 - a2) * 2.0, 0.0, 1.0), 8.0);
   }
   bottom += vec3(1.0, 0.97, 0.85) * net * (0.08 + uLightGlow * 0.35) * mix(1.0, 0.4, uDepth);
 
@@ -128,7 +129,7 @@ void main(){
   vec3 Hv = normalize(L + V);
   float spec = pow(max(dot(n, Hv), 0.0), 340.0);
   // Schlick Fresnel, water's normal-incidence reflectance is about 2%.
-  float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
+  float fresnel = 0.02 + 0.98 * pow(clamp(1.0 - dot(n, V), 0.0, 1.0), 5.0);
   vec3 reflected = mix(vec3(0.12, 0.19, 0.23), vec3(0.7, 0.84, 0.89), clamp(n.y * 0.5 + 0.5, 0.0, 1.0));
   col = mix(col, reflected, fresnel * 0.8);
   col += vec3(1.0, 0.98, 0.91) * spec * (1.65 + uLightGlow * 2.5);
@@ -141,14 +142,7 @@ void main(){
   float energy = clamp(abs(hc) * 0.22 + rim * 1.15 + caustic * 0.32, 0.0, 1.2);
   col += uGlow * uGlowAmt * (energy * 0.95 + caustic * 1.2);
 
-  // Edge foam while the water sloshes against the walls.
-  vec2 e = min(uv, 1.0 - uv) * vec2(uAspect, 1.0);
-  float edge = 1.0 - smoothstep(0.0, 0.07, min(e.x, e.y));
-  float crest = smoothstep(0.4, 2.2, abs(hc) + length(g) * 2.0);
-  float foamN = vnoise(uv * vec2(uAspect, 1.0) * 70.0 + uTime * 0.6) * vnoise(uv * 140.0 - uTime * 0.4);
-  float foam = clamp(edge * crest * uSlosh * smoothstep(0.12, 0.45, foamN) * 2.2, 0.0, 0.9);
-  col = mix(col, vec3(0.94, 0.97, 0.98), foam);
-
+  col = max(col, vec3(0.0));
   o = vec4(col / (vec3(1.0) + col * 0.28), 1.0);
 }`;
 
@@ -187,7 +181,7 @@ export class WaterRenderer {
     const loc = gl.getAttribLocation(p, "aPos");
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    for (const n of ["uH", "uObj", "uTexel", "uBg", "uLiquid", "uLiquidAmt", "uGlow", "uGlowAmt", "uAspect", "uTime", "uShallow", "uDeep", "uDepth", "uLight", "uMood", "uSlosh", "uLightGlow"])
+    for (const n of ["uH", "uObj", "uTexel", "uBg", "uLiquid", "uLiquidAmt", "uGlow", "uGlowAmt", "uAspect", "uTime", "uShallow", "uDeep", "uDepth", "uLight", "uMood", "uSlosh", "uLightGlow", "uParallax"])
       this.u[n] = gl.getUniformLocation(p, n);
 
     const mk = () => {
@@ -236,6 +230,7 @@ export class WaterRenderer {
     mood: number;
     slosh: number;
     lightGlow: number;
+    parallax: { x: number; y: number };
   }) {
     const gl = this.gl;
     const c = gl.canvas as HTMLCanvasElement;
@@ -264,6 +259,7 @@ export class WaterRenderer {
     gl.uniform1f(u["uMood"] ?? null, opts.mood);
     gl.uniform1f(u["uSlosh"] ?? null, opts.slosh);
     gl.uniform1f(u["uLightGlow"] ?? null, opts.lightGlow);
+    gl.uniform2f(u["uParallax"] ?? null, opts.parallax.x, opts.parallax.y);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 }

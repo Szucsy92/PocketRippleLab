@@ -114,7 +114,7 @@ export function WaterApp() {
       const y = m + Math.random() * (world.height - 2 * m);
       const t = makeThing(k, x, y, objScale());
       world.things.push(t);
-      const big = k === "fish" ? 2.5 : k === "pebble" ? 5 : 7;
+      const big = 7;
       sim.disturb(x / world.cell, y / world.cell, Math.max(5.5, (t.r / world.cell) * 1.65), -big * 1.45);
       if (world.things.length > 40) world.things.shift();
     };
@@ -253,12 +253,9 @@ export function WaterApp() {
         }
         if (acc > 1) acc = 0;
 
-        const hasUnder = world.things.some((t) => !isFloating(t.kind));
-        if (hasUnder) {
-          drawUnder(underCtx, world.things, underScale);
-          renderer.uploadObjects(under);
-        } else renderer.uploadObjects(null);
-        drawSurface(topCtx, world.things, dpr);
+        drawUnder(underCtx, world.things, underScale, tilt.value, s.depth);
+        renderer.uploadObjects(world.things.length ? under : null);
+        drawSurface(topCtx, world.things, dpr, tilt.value);
 
         const liq = LIQUIDS[s.liquid] ?? { hex: "transparent" };
         renderer.draw({
@@ -276,6 +273,7 @@ export function WaterApp() {
           mood: s.mood === "sea" ? 1 : s.mood === "lake" ? 2 : 0,
           slosh: s.tiltOn ? slosh : 0,
           lightGlow,
+          parallax: s.tiltOn ? tilt.value : { x: 0, y: 0 },
         });
       }
       raf = requestAnimationFrame(frame);
