@@ -12,9 +12,8 @@ const MOOD_IMAGES = { pool: poolImage, sea: seaImage, lake: lakeImage };
 const THINGS: { kind: Kind; label: string; icon: string }[] = [
   { kind: "duck", label: "Kacsa", icon: "🦆" },
   { kind: "boat", label: "Hajó", icon: "⛵" },
-  { kind: "fish", label: "Hal", icon: "🐟" },
-  { kind: "ball", label: "Golyó", icon: "🔮" },
-  { kind: "pebble", label: "Kavics", icon: "🪨" },
+  { kind: "ball", label: "Labda", icon: "🏐" },
+  { kind: "ring", label: "Úszógumi", icon: "🛟" },
 ];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
