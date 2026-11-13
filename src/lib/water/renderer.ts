@@ -61,10 +61,13 @@ void main(){
   // Box view: the screen is the opening of a box, tilting moves the eye.
   // The ray starts at the (refracted) surface point and runs towards the floor.
   float boxD = 0.25 + uDepth * 0.75;              // box depth in screen-height units
-  float relief = uMood == 0.0 ? 1.0 : 0.7;         // sea / lake: softer, no hard walls
+  float relief = uMood == 0.0 ? 1.0 : 0.6;         // sea / lake: softer, no hard walls
   vec2 sPhys = clamp(uParallax * boxD * 0.7 * relief, vec2(-0.6), vec2(0.6));
-  vec2 sh = vec2(sPhys.x / uAspect, sPhys.y);       // shift in uv units (floor vs. surface)
   vec2 start = clamp(uv + n.xy * vec2(1.0, uAspect) * (0.025 + uDepth * 0.09), vec2(0.001), vec2(0.999));
+  // Built-in perspective: the eye sits above the centre, so the floor is a smaller rectangle than the
+  // opening and the walls form a trapezoid on every side, even without tilt. Tilt then moves the eye.
+  float persp = boxD * 0.45 * relief;
+  vec2 sh = vec2(sPhys.x / uAspect, sPhys.y) + (start - 0.5) * persp;   // ray offset in uv units
 
   // Pool only: find where the ray hits a side wall before reaching the floor.
   float tHit = 2.0; float wallAxis = 0.0; float wallAlong = 0.0; float wallSide = 0.0;
