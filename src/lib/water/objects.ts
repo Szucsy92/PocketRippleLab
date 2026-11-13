@@ -1,6 +1,9 @@
 import type { WaterSim } from "./sim";
 
-export type Kind = "duck" | "boat" | "ball" | "ring";
+export type Kind = "duck" | "boat" | "ball" | "ring" | FishKind;
+export type FishKind = "koi" | "tang" | "perch" | "shark";
+export const FISH: FishKind[] = ["koi", "tang", "perch", "shark"];
+export const isFish = (k: Kind): k is FishKind => (FISH as string[]).includes(k);
 
 export type Thing = {
   id: number;
@@ -22,10 +25,17 @@ export type Thing = {
   rockVY: number;
   grabbed: number | null;
   wakeT: number;
+  /** Fish: wander target heading, fear (0..1), tail beat phase. */
+  wander: number;
+  fear: number;
+  tail: number;
+  bite: number;
 };
 
 let nextId = 1;
-export const isFloating = (_k: Kind) => true;
+export const isFloating = (k: Kind) => !isFish(k);
+/** Every toy and fish is 3x the original size. */
+export const SIZE_FACTOR = 3;
 
 /** Feel constants: lighter toys get carried further by the waves. */
 export const PHYS: Record<Kind, { push: number; drag: number; size: number; flow: number }> = {
@@ -33,13 +43,57 @@ export const PHYS: Record<Kind, { push: number; drag: number; size: number; flow
   ring: { push: 3000, drag: 0.85, size: 30, flow: 11 },
   duck: { push: 2000, drag: 1.25, size: 26, flow: 8 },
   boat: { push: 1700, drag: 1.1, size: 32, flow: 7 },
+  koi: { push: 500, drag: 2.2, size: 18, flow: 3 },
+  tang: { push: 500, drag: 2.2, size: 14, flow: 3 },
+  perch: { push: 500, drag: 2.2, size: 15, flow: 3 },
+  shark: { push: 250, drag: 1.8, size: 30, flow: 1.5 },
 };
+
+/** Fish personalities: cruise/flee speeds. Only the shark hunts a moving finger. */
+export const FISH_SPEED: Record<FishKind, { cruise: number; flee: number }> = {
+  koi: { cruise: 45, flee: 420 },
+  tang: { cruise: 55, flee: 480 },
+  perch: { cruise: 60, flee: 500 },
+  shark: { cruise: 70, flee: 0 },
+};
+
+export type Touch = { x: number; y: number; speed: number };
+
+/** Pure decision: where does a fish want to go? Returns a desired velocity. */
+export function fishIntent(kind: FishKind, fx: number, fy: number, touches: Touch[], fear: number): { vx: number; vy: number; mode: "flee" | "come" | "hunt" | "circle" | "cruise" } {
+  const sp = FISH_SPEED[kind];
+  let near: Touch | null = null, nd = Infinity;
+  for (const t of touches) { const d = Math.hypot(t.x - fx, t.y - fy); if (d < nd) { nd = d; near = t; } }
+  if (kind === "shark") {
+    if (near && near.speed > 60) {
+      const k = 520 / Math.max(1, nd);
+      return { vx: (near.x - fx) * k, vy: (near.y - fy) * k, mode: "hunt" };
+    }
+    if (near) {
+      const ang = Math.atan2(fy - near.y, fx - near.x) + 0.9;
+      const R = 140;
+      return { vx: (near.x + Math.cos(ang) * R - fx) * 1.5, vy: (near.y + Math.sin(ang) * R - fy) * 1.5, mode: "circle" };
+    }
+    return { vx: 0, vy: 0, mode: "cruise" };
+  }
+  if (near && near.speed > 60 && nd < 420) {
+    const k = sp.flee / Math.max(1, nd);
+    return { vx: (fx - near.x) * k, vy: (fy - near.y) * k, mode: "flee" };
+  }
+  if (fear > 0.25) return { vx: 0, vy: 0, mode: "flee" };
+  if (near) {
+    const k = Math.min(1, Math.max(0, nd - 60) / 200) * 160 / Math.max(1, nd);
+    return { vx: (near.x - fx) * k, vy: (near.y - fy) * k, mode: "come" };
+  }
+  return { vx: 0, vy: 0, mode: "cruise" };
+}
 
 export function makeThing(kind: Kind, x: number, y: number, scale: number): Thing {
   return {
     id: nextId++, kind, x, y, vx: 0, vy: 0,
-    r: PHYS[kind].size * scale * (0.92 + Math.random() * 0.16),
+    r: PHYS[kind].size * SIZE_FACTOR * scale * (0.92 + Math.random() * 0.16),
     angle: Math.random() * Math.PI * 2, spin: 0,
+    wander: Math.random() * Math.PI * 2, fear: 0, tail: Math.random() * 6, bite: 0,
     color: kind === "duck" ? "#ffc93c" : kind === "ring" ? "#ffcf1f" : kind === "ball" ? "#e8322b" : "#b5763f",
     phase: Math.random() * 10, lift: 0,
     rockX: 0, rockY: 0, rockVX: 0, rockVY: 0,
@@ -53,7 +107,7 @@ export type World = {
   height: number;
   cell: number;
   tilt: { x: number; y: number };
-  touches: { x: number; y: number }[];
+  touches: Touch[];
 };
 
 const G = 900;
@@ -61,6 +115,7 @@ const G = 900;
 export function updateThings(world: World, sim: WaterSim, dt: number) {
   const { things, width, height, cell, tilt } = world;
   for (const t of things) {
+    if (isFish(t.kind)) { updateFish(t, t.kind, world, sim, dt); continue; }
     const sx = t.x / cell, sy = t.y / cell;
     t.phase += dt;
     const [gx, gy] = sim.gradient(sx, sy);
@@ -120,6 +175,7 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
     const a = things[i]; if (!a) continue;
     for (let j = i + 1; j < things.length; j++) {
       const b = things[j]; if (!b) continue;
+      if (isFish(a.kind) !== isFish(b.kind)) continue;
       const dx = b.x - a.x, dy = b.y - a.y;
       const d = Math.hypot(dx, dy), min = a.r + b.r;
       if (d > 0 && d < min) {
@@ -132,6 +188,52 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
           b.vx += nx * imp * 0.5; b.vy += ny * imp * 0.5;
         }
       }
+    }
+  }
+}
+
+function updateFish(t: Thing, kind: FishKind, world: World, sim: WaterSim, dt: number) {
+  const { width, height, cell } = world;
+  const sx = t.x / cell, sy = t.y / cell;
+  // Rough water nearby scares the gentle fish.
+  const h = Math.abs(sim.sample(sx, sy));
+  const [gx, gy] = sim.gradient(sx, sy);
+  if (kind !== "shark") t.fear = Math.min(1, t.fear + Math.max(0, h - 0.8) * dt * 3);
+  t.fear *= Math.exp(-dt * 0.8);
+  const it = fishIntent(kind, t.x, t.y, world.touches, t.fear);
+  const sp = FISH_SPEED[kind];
+  let dvx = it.vx, dvy = it.vy;
+  if (it.mode === "cruise" || (it.mode === "flee" && dvx === 0 && dvy === 0)) {
+    t.wander += (Math.random() - 0.5) * dt * 1.6;
+    const v = it.mode === "flee" ? sp.flee * 0.8 : sp.cruise;
+    if (it.mode === "flee" && Math.hypot(gx, gy) > 1e-3) t.wander = Math.atan2(gy, gx);
+    dvx = Math.cos(t.wander) * v; dvy = Math.sin(t.wander) * v;
+  }
+  // Steer away from walls.
+  const m = t.r * 2;
+  if (t.x < m) dvx += (m - t.x) * 4; if (t.x > width - m) dvx -= (t.x - width + m) * 4;
+  if (t.y < m) dvy += (m - t.y) * 4; if (t.y > height - m) dvy -= (t.y - height + m) * 4;
+  const resp = it.mode === "flee" || it.mode === "hunt" ? 5 : 1.6;
+  t.vx += (dvx - t.vx) * Math.min(1, dt * resp);
+  t.vy += (dvy - t.vy) * Math.min(1, dt * resp);
+  const v = Math.hypot(t.vx, t.vy);
+  if (v > 8) {
+    let d = Math.atan2(t.vy, t.vx) - t.angle;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    t.angle += d * Math.min(1, dt * 5);
+    t.wander = t.angle;
+  }
+  t.x = Math.max(t.r * 0.5, Math.min(width - t.r * 0.5, t.x + t.vx * dt));
+  t.y = Math.max(t.r * 0.5, Math.min(height - t.r * 0.5, t.y + t.vy * dt));
+  t.tail += dt * (4 + v * 0.05);
+  // Shark snaps at the moving finger.
+  t.bite = Math.max(0, t.bite - dt * 3);
+  if (kind === "shark" && it.mode === "hunt") {
+    const head = { x: t.x + Math.cos(t.angle) * t.r * 1.1, y: t.y + Math.sin(t.angle) * t.r * 1.1 };
+    for (const p of world.touches) if (Math.hypot(p.x - head.x, p.y - head.y) < t.r * 0.8 && t.bite <= 0) {
+      t.bite = 1;
+      sim.disturb(head.x / cell, head.y / cell, (t.r / cell) * 0.9, -4);
+      t.vx *= 0.3; t.vy *= 0.3;
     }
   }
 }
@@ -315,6 +417,72 @@ function drawBoat(ctx: CanvasRenderingContext2D, t: Thing, l: V) {
   ctx.beginPath(); ctx.arc(tx, ty, r * 0.07, 0, Math.PI * 2); ctx.fill();
 }
 
+const FISH_LOOK: Record<FishKind, { body: [string, string, string]; fin: string; len: number; wid: number }> = {
+  koi: { body: ["#fff4e6", "#ff7a1a", "#b33a0a"], fin: "rgba(255,200,160,0.55)", len: 1.25, wid: 0.36 },
+  tang: { body: ["#9fd4ff", "#1f5fd6", "#0b2a7a"], fin: "rgba(255,214,40,0.9)", len: 1.1, wid: 0.42 },
+  perch: { body: ["#e6efb0", "#7f9a3a", "#3b4a18"], fin: "rgba(210,120,60,0.7)", len: 1.2, wid: 0.32 },
+  shark: { body: ["#e8eef2", "#6f8494", "#36454f"], fin: "rgba(80,100,115,0.95)", len: 1.5, wid: 0.3 },
+};
+
+function drawFish(ctx: CanvasRenderingContext2D, t: Thing, kind: FishKind) {
+  const L = FISH_LOOK[kind], r = t.r, len = r * L.len, w = r * L.wid;
+  const sw = Math.sin(t.tail) * 0.35;
+  const bite = t.bite;
+  // Body spine bends with the tail beat.
+  const body = new Path2D();
+  const tx = -len, ty = sw * r * 0.5;
+  body.moveTo(len, 0);
+  body.bezierCurveTo(len * 0.7, -w * 1.1, -len * 0.3, -w * 1.2, tx * 0.85, ty - w * 0.15);
+  body.lineTo(tx * 0.85, ty + w * 0.15);
+  body.bezierCurveTo(-len * 0.3, w * 1.2, len * 0.7, w * 1.1, len, 0);
+  // Tail fin
+  ctx.fillStyle = L.fin;
+  ctx.beginPath();
+  ctx.moveTo(tx * 0.8, ty);
+  ctx.quadraticCurveTo(tx * 1.05, ty - w * 0.4, tx * 1.25, ty - w * (kind === "shark" ? 1.4 : 1.1) + sw * r * 0.2);
+  ctx.quadraticCurveTo(tx * 1.05, ty, tx * 1.25, ty + w * (kind === "shark" ? 0.9 : 1.1) + sw * r * 0.2);
+  ctx.closePath(); ctx.fill();
+  // Pectoral fins
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(len * 0.25, s * w * 1.05, r * (kind === "shark" ? 0.45 : 0.25), r * 0.1, s * (kind === "shark" ? 0.9 : 0.6) - sw * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const g = ctx.createLinearGradient(0, -w, 0, w);
+  g.addColorStop(0, L.body[2]); g.addColorStop(0.5, L.body[1]); g.addColorStop(1, L.body[2]);
+  ctx.fillStyle = g; ctx.fill(body);
+  ctx.save(); ctx.clip(body);
+  if (kind === "koi") {
+    ctx.fillStyle = "rgba(255,250,240,0.9)";
+    for (const [x, y, rr] of [[0.4, -0.1, 0.28], [-0.2, 0.15, 0.3], [-0.65, -0.05, 0.2]] as const) { ctx.beginPath(); ctx.arc(len * x, w * y, r * rr, 0, Math.PI * 2); ctx.fill(); }
+  } else if (kind === "perch") {
+    ctx.fillStyle = "rgba(30,40,10,0.45)";
+    for (let i = 0; i < 5; i++) ctx.fillRect(len * (0.45 - i * 0.28), -w * 1.2, r * 0.08, w * 2.4);
+  } else if (kind === "tang") {
+    ctx.fillStyle = "rgba(5,15,50,0.55)";
+    ctx.beginPath(); ctx.ellipse(-len * 0.05, 0, len * 0.5, w * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = "rgba(20,30,40,0.35)";
+    ctx.fillRect(-len, -w * 0.18, len * 2, w * 0.36);
+  }
+  ctx.fillStyle = "rgba(255,255,255,0.25)";
+  ctx.beginPath(); ctx.ellipse(len * 0.2, -w * 0.2, len * 0.5, w * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  if (kind === "shark") {
+    // Dorsal fin seen from above + open jaw when biting
+    ctx.fillStyle = L.fin;
+    ctx.beginPath(); ctx.moveTo(len * 0.15, 0); ctx.lineTo(-len * 0.35, -w * 0.12); ctx.lineTo(-len * 0.35, w * 0.12); ctx.fill();
+    if (bite > 0) {
+      ctx.fillStyle = "rgba(120,20,30,0.9)";
+      ctx.beginPath(); ctx.ellipse(len * 0.92, 0, r * 0.18 * bite, w * 0.5 * bite, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      for (const s of [-1, 1]) for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(len * (0.82 + i * 0.06), s * w * 0.4 * bite, r * 0.03, 0, Math.PI * 2); ctx.fill(); }
+    }
+  }
+  ctx.fillStyle = "#0a0a0a";
+  for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(len * 0.72, s * w * 0.55, r * 0.06, 0, Math.PI * 2); ctx.fill(); }
+}
+
 /** Soft shadows cast onto the floor – refracted by the water in the renderer. */
 export function drawUnder(ctx: CanvasRenderingContext2D, things: Thing[], scale: number, tilt: V = { x: 0, y: 0 }, depth = 1) {
   const c = ctx.canvas;
@@ -331,8 +499,8 @@ export function drawUnder(ctx: CanvasRenderingContext2D, things: Thing[], scale:
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(t.angle);
-    const sx = t.kind === "duck" ? 1.05 : t.kind === "boat" ? 1.15 : 1;
-    const sy = t.kind === "duck" ? 0.78 : t.kind === "boat" ? 0.5 : 1;
+    const sx = t.kind === "duck" ? 1.05 : t.kind === "boat" ? 1.15 : isFish(t.kind) ? 1.3 : 1;
+    const sy = t.kind === "duck" ? 0.78 : t.kind === "boat" ? 0.5 : isFish(t.kind) ? 0.4 : 1;
     ctx.scale(sx, sy);
     const g = ctx.createRadialGradient(0, 0, 0, 0, 0, t.r + blur);
     if (t.kind === "ring") {
@@ -360,7 +528,18 @@ export function drawSurface(ctx: CanvasRenderingContext2D, things: Thing[], dpr:
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, c.width, c.height);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // Fish swim under the surface: drawn first, slightly softened by the water.
   for (const t of things) {
+    if (!isFish(t.kind)) continue;
+    ctx.save();
+    ctx.globalAlpha = 0.82;
+    ctx.translate(t.x + tilt.x * 6, t.y + tilt.y * 6);
+    ctx.rotate(t.angle);
+    drawFish(ctx, t, t.kind);
+    ctx.restore();
+  }
+  for (const t of things) {
+    if (isFish(t.kind)) continue;
     const bob = 1 + Math.max(-0.06, Math.min(0.08, t.lift * 0.015)) + (t.grabbed !== null ? 0.14 : 0);
     const l = lean(t, tilt);
     // Waterline contact shade
