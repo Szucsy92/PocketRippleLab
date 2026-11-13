@@ -72,3 +72,11 @@ describe("Water rules", () => {
     expect(sim.cur[20 * 41 + 20 + 13]).toBe(0);
   });
 });
+import { PHYS } from "../lib/water/objects";
+describe("Toys", () => {
+  it("only offers boat, duck, ball and ring", () => expect(Object.keys(PHYS).sort()).toEqual(["ball", "boat", "duck", "ring"]));
+  it("carries light toys further than heavy ones", () => {
+    expect(PHYS.ball.push).toBeGreaterThan(PHYS.duck.push);
+    expect(PHYS.ring.push).toBeGreaterThan(PHYS.boat.push);
+  });
+});
