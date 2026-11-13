@@ -122,6 +122,7 @@ export function WaterApp() {
       world.things = [];
     };
     engine.current = { add, clear, tilt };
+    if (import.meta.env.DEV) (window as unknown as { __water?: unknown }).__water = { add };
 
     // Pointers
     const pointers = new Map<number, { x: number; y: number; t: number; grab: number | null }>();
