@@ -109,7 +109,7 @@ export function WaterApp() {
     const objScale = () => Math.max(0.8, Math.min(1.6, Math.min(world.width, world.height) / 390));
 
     const add = (k: Kind) => {
-      const m = 60;
+      const m = 120;
       const x = m + Math.random() * (world.width - 2 * m);
       const y = m + Math.random() * (world.height - 2 * m);
       const t = makeThing(k, x, y, objScale());
@@ -125,7 +125,7 @@ export function WaterApp() {
     if (import.meta.env.DEV) (window as unknown as { __water?: unknown }).__water = { add };
 
     // Pointers
-    const pointers = new Map<number, { x: number; y: number; t: number; grab: number | null }>();
+    const pointers = new Map<number, { x: number; y: number; t: number; grab: number | null; speed: number }>();
     const toSim = (v: number) => v / world.cell;
     const onDown = (e: PointerEvent) => {
       e.preventDefault();
@@ -142,7 +142,7 @@ export function WaterApp() {
           break;
         }
       }
-      pointers.set(e.pointerId, { x, y, t: performance.now(), grab });
+      pointers.set(e.pointerId, { x, y, t: performance.now(), grab, speed: 0 });
       if (grab === null) {
         sim.disturb(toSim(x), toSim(y), 8.5, -5.5);
         rain.touch(0.12);
@@ -172,6 +172,7 @@ export function WaterApp() {
         const stepPx = world.cell * 1.5;
         const n = Math.max(1, Math.ceil(dist / stepPx));
         const speed = dist / dt;
+        p.speed = p.speed * 0.5 + speed * 0.5;
         rain.touch(Math.min(0.12, dist * 0.001));
         sim.swirl(toSim(x), toSim(y), toSim(dx), toSim(dy));
         const s = -Math.min(3.2, 0.4 + speed * 0.0017);
@@ -243,6 +244,7 @@ export function WaterApp() {
         else lightGlow *= Math.exp(-dt * 1.2);
         lastLight = s.light;
         world.touches = [...pointers.values()].filter((p) => p.grab === null);
+        for (const p of pointers.values()) p.speed *= Math.exp(-dt * 6);
         updateThings(world, sim, dt);
 
         acc += dt * 60 * s.waveSpeed;

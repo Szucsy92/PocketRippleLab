@@ -72,9 +72,18 @@ describe("Water rules", () => {
     expect(sim.cur[20 * 41 + 20 + 13]).toBe(0);
   });
 });
-import { PHYS } from "../lib/water/objects";
+import { PHYS, fishIntent, makeThing, SIZE_FACTOR } from "../lib/water/objects";
 describe("Toys", () => {
-  it("only offers boat, duck, ball and ring", () => expect(Object.keys(PHYS).sort()).toEqual(["ball", "boat", "duck", "ring"]));
+  it("offers 4 toys and 4 fish incl. a shark", () => expect(Object.keys(PHYS).sort()).toEqual(["ball", "boat", "duck", "koi", "perch", "ring", "shark", "tang"]));
+  it("makes things 3x bigger", () => { expect(SIZE_FACTOR).toBe(3); expect(makeThing("ball", 0, 0, 1).r).toBeGreaterThan(20 * 3 * 0.9); });
+  it("gentle fish flee a moving finger, come to a still one", () => {
+    expect(fishIntent("koi", 100, 100, [{ x: 200, y: 100, speed: 300 }], 0).vx).toBeLessThan(0);
+    expect(fishIntent("koi", 100, 100, [{ x: 400, y: 100, speed: 0 }], 0).vx).toBeGreaterThan(0);
+  });
+  it("only the shark hunts a moving finger", () => {
+    const r = fishIntent("shark", 100, 100, [{ x: 300, y: 100, speed: 300 }], 0);
+    expect(r.mode).toBe("hunt"); expect(r.vx).toBeGreaterThan(0);
+  });
   it("carries light toys further than heavy ones", () => {
     expect(PHYS.ball.push).toBeGreaterThan(PHYS.duck.push);
     expect(PHYS.ring.push).toBeGreaterThan(PHYS.boat.push);

@@ -14,6 +14,10 @@ const THINGS: { kind: Kind; label: string; icon: string }[] = [
   { kind: "boat", label: "Hajó", icon: "⛵" },
   { kind: "ball", label: "Labda", icon: "🏐" },
   { kind: "ring", label: "Úszógumi", icon: "🛟" },
+  { kind: "koi", label: "Koi", icon: "🐠" },
+  { kind: "tang", label: "Kék hal", icon: "🐟" },
+  { kind: "perch", label: "Csíkos hal", icon: "🐡" },
+  { kind: "shark", label: "Cápa", icon: "🦈" },
 ];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -97,7 +101,7 @@ export function SettingsPanel(props: {
         <WaterLightControls settings={s} onChange={onChange} onPreview={setPreview} />
 
         <Section title="Tegyél valamit a vízbe">
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {THINGS.map((t) => (
               <Button variant="ghost" key={t.kind} className="thing-btn" onClick={() => props.onAdd(t.kind)}>
                 <span className="text-2xl">{t.icon}</span>
