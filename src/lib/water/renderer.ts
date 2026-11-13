@@ -58,27 +58,67 @@ void main(){
   vec3 n = normalize(vec3(-g * 1.6, 1.0));
   float lap = hl + hr + hu + hd - 4.0 * hc;
 
-  // Refracted view of the bottom
-  vec2 ruv = clamp(uv + uParallax * (0.25 + uDepth) * vec2(1.0, uAspect) * 0.04 + n.xy * vec2(1.0, uAspect) * (0.025 + uDepth * 0.09), vec2(0.001), vec2(0.999));
+  // Box view: the screen is the opening of a box, tilting moves the eye.
+  // The ray starts at the (refracted) surface point and runs towards the floor.
+  float boxD = 0.25 + uDepth * 0.75;              // box depth in screen-height units
+  float relief = uMood == 0.0 ? 1.0 : 0.7;         // sea / lake: softer, no hard walls
+  vec2 sPhys = clamp(uParallax * boxD * 0.7 * relief, vec2(-0.6), vec2(0.6));
+  vec2 sh = vec2(sPhys.x / uAspect, sPhys.y);       // shift in uv units (floor vs. surface)
+  vec2 start = clamp(uv + n.xy * vec2(1.0, uAspect) * (0.025 + uDepth * 0.09), vec2(0.001), vec2(0.999));
+
+  // Pool only: find where the ray hits a side wall before reaching the floor.
+  float tHit = 2.0; float wallAxis = 0.0; float wallAlong = 0.0; float wallSide = 0.0;
+  if (uMood == 0.0) {
+    float tx = 9.0; float ty = 9.0;
+    if (sh.x > 1e-5) tx = (1.0 - start.x) / sh.x; else if (sh.x < -1e-5) tx = -start.x / sh.x;
+    if (sh.y > 1e-5) ty = (1.0 - start.y) / sh.y; else if (sh.y < -1e-5) ty = -start.y / sh.y;
+    if (tx < ty) { tHit = tx; wallAxis = 0.0; wallAlong = start.y + sh.y * tx; wallSide = sign(sh.x); }
+    else         { tHit = ty; wallAxis = 1.0; wallAlong = start.x + sh.x * ty; wallSide = sign(sh.y); }
+  }
+  bool onWall = tHit < 1.0;
+
+  vec2 ruv = start + sh;                            // floor sample (may leave 0..1 on sea / lake)
+  if (uMood == 0.0) ruv = clamp(ruv, vec2(0.001), vec2(0.999));
   vec2 q = ruv * vec2(uAspect, 1.0);
+  vec2 shq = sh * vec2(uAspect, 1.0);               // floor shift in q units
 
   float vign = 1.0 - smoothstep(0.25, 1.05, length((ruv - 0.5) * vec2(uAspect, 1.0) * 1.3));
   vec3 bottom;
   if (uMood == 0.0) {
-    // Pool: straight, clean tiled floor parallel to the screen.
-    vec2 t = q * 7.0;
+    // Pool: tiled floor and tiled side walls.
+    vec2 pq = q;
+    if (onWall) {
+      float dd = tHit * boxD * 1.0;
+      pq = wallAxis < 0.5 ? vec2(dd, wallAlong) : vec2(wallAlong * uAspect, dd);
+    }
+    vec2 t = pq * 7.0;
     vec2 f = abs(fract(t) - 0.5);
     float grout = smoothstep(0.47, 0.495, max(f.x, f.y));
     float tileVar = hash(floor(t)) * 0.06;
     bottom = vec3(0.5, 0.78, 0.86) * (0.62 + tileVar) - grout * vec3(0.18, 0.2, 0.2);
+    if (onWall) {
+      // Walls get darker with depth, side walls are lit differently, the wall/floor corner is shaded.
+      float side = wallAxis < 0.5 ? 0.86 : 0.7;
+      bottom *= side * mix(1.0, 0.38, tHit) * (1.0 - 0.3 * smoothstep(0.9, 1.0, tHit));
+    } else {
+      // Floor: soft contact shadow where it meets the walls.
+      vec2 e = abs(ruv - 0.5) * 2.0;
+      bottom *= 1.0 - 0.18 * smoothstep(0.82, 1.0, max(e.x, e.y)) * min(1.0, length(sh) * 6.0);
+    }
   } else if (uMood == 1.0) {
-    // Seabed: golden sand ridges.
-    float ridge = sin(q.x * 38.0 + vnoise(q * 4.0) * 6.0 + q.y * 9.0) * 0.5 + 0.5;
-    float grain = vnoise(q * 60.0);
+    // Seabed: golden sand ridges with relief parallax (ridge crests sit closer to the eye).
+    float ridge0 = sin(q.x * 38.0 + vnoise(q * 4.0) * 6.0 + q.y * 9.0) * 0.5 + 0.5;
+    vec2 q2 = q - shq * 0.35 * ridge0;
+    float ridge = sin(q2.x * 38.0 + vnoise(q2 * 4.0) * 6.0 + q2.y * 9.0) * 0.5 + 0.5;
+    float grain = vnoise(q2 * 60.0);
     bottom = mix(vec3(0.58, 0.48, 0.3), vec3(0.82, 0.7, 0.46), ridge * 0.7 + grain * 0.3);
+    // Self shadow on the side facing away from the eye shift.
+    float lee = clamp((ridge - ridge0) * 6.0, -1.0, 1.0);
+    bottom *= 1.0 + lee * 0.14 * min(1.0, length(shq) * 10.0);
   } else if (uMood == 2.0) {
-    // Lake: pebbles and moss.
-    vec2 c = q * 11.0;
+    // Lake: pebbles stand above the moss, so they shift less than the bed below them.
+    vec2 qTop = q - shq * 0.4;
+    vec2 c = qTop * 11.0;
     vec2 cell = floor(c);
     float d = 9.0; float id = 0.0;
     for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
@@ -88,8 +128,15 @@ void main(){
       if (dd < d) { d = dd; id = hash(o2 + 3.1); }
     }
     vec3 stone = mix(vec3(0.42, 0.36, 0.28), vec3(0.62, 0.56, 0.46), id);
-    vec3 moss = vec3(0.2, 0.3, 0.14);
-    bottom = mix(stone, moss, smoothstep(0.35, 0.6, d) * 0.85) * (0.8 + vnoise(q * 30.0) * 0.3);
+    stone *= 0.8 + vnoise(qTop * 30.0) * 0.3;
+    // Stone shading: rounded, darker rim on the far side.
+    stone *= 0.78 + 0.35 * (1.0 - smoothstep(0.0, 0.6, d));
+    vec3 moss = vec3(0.2, 0.3, 0.14) * (0.5 + vnoise(q * 30.0) * 0.4);
+    float stoneMask = 1.0 - smoothstep(0.35, 0.6, d);
+    // Dark gap shadow around each stone, stronger when tilted.
+    float gap = smoothstep(0.62, 0.35, d) * (1.0 - stoneMask);
+    moss *= 1.0 - 0.45 * gap * min(1.0, 0.4 + length(shq) * 8.0);
+    bottom = mix(moss, stone, stoneMask);
   } else {
     bottom = uBg * (0.55 + 0.9 * vign);
     float sand = vnoise(q * 9.0) * 0.6 + vnoise(q * 23.0) * 0.4;
@@ -107,11 +154,12 @@ void main(){
   }
   bottom += vec3(1.0, 0.97, 0.85) * net * (0.08 + uLightGlow * 0.35) * mix(1.0, 0.4, uDepth);
 
-  vec4 obj = texture(uObj, ruv);
-  bottom = mix(bottom, obj.rgb, obj.a);
+  vec4 obj = texture(uObj, clamp(ruv, vec2(0.001), vec2(0.999)));
+  if (!onWall) bottom = mix(bottom, obj.rgb, obj.a);
 
   // Beer–Lambert transmission: red attenuates faster with optical path length.
-  float opticalDepth = max(0.04, 0.18 + uDepth * 2.8 - hc * 0.055);
+  float pathFrac = onWall ? tHit : 1.0;
+  float opticalDepth = max(0.04, 0.18 + uDepth * 2.8 * pathFrac - hc * 0.055);
   vec3 transmission = exp(-vec3(1.45, 0.48, 0.23) * opticalDepth);
   vec3 waterTint = mix(uDeep, uShallow, exp(-opticalDepth * 0.8));
   waterTint = mix(waterTint, uLiquid, 0.35);

@@ -324,8 +324,8 @@ export function drawUnder(ctx: CanvasRenderingContext2D, things: Thing[], scale:
   const off = 10 + depth * 30;
   for (const t of things) {
     const lifted = t.grabbed !== null ? 1.8 : 1;
-    const x = t.x + (0.35 + tilt.x * 1.4) * off * lifted;
-    const y = t.y + (0.45 + tilt.y * 1.4) * off * lifted;
+    const x = t.x + (0.35 + tilt.x * 0.25) * off * lifted;
+    const y = t.y + (0.45 + tilt.y * 0.25) * off * lifted;
     const blur = t.r * (0.5 + depth * 0.6) * lifted;
     const alpha = 0.42 - depth * 0.14;
     ctx.save();
