@@ -543,16 +543,9 @@ export function drawSurface(ctx: CanvasRenderingContext2D, things: Thing[], dpr:
     if (isFish(t.kind)) continue;
     const bob = 1 + Math.max(-0.06, Math.min(0.08, t.lift * 0.015)) + (t.grabbed !== null ? 0.14 : 0);
     const l = lean(t, tilt);
-    // Waterline contact shade
     ctx.save();
     ctx.translate(t.x, t.y);
     ctx.rotate(t.angle);
-    ctx.fillStyle = "rgba(0,20,30,0.22)";
-    ctx.beginPath();
-    const ws = t.kind === "boat" ? [1.15, 0.5] : t.kind === "duck" ? [1.05, 0.8] : [1.04, 1.04];
-    ctx.ellipse(0, 0, t.r * (ws[0] ?? 1), t.r * (ws[1] ?? 1), 0, 0, Math.PI * 2);
-    if (t.kind === "ring") ctx.arc(0, 0, t.r * 0.32, 0, Math.PI * 2, true);
-    ctx.fill("evenodd");
     // 3D: foreshorten along the lean, shift the top
     ctx.translate(l.x * t.r * 0.12, l.y * t.r * 0.12);
     ctx.scale(bob * (1 - Math.abs(l.x) * 0.12), bob * (1 - Math.abs(l.y) * 0.12));
