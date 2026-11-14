@@ -68,6 +68,15 @@ export function WaterApp() {
     if (!topCtx || !underCtx) { setFailed(true); return; }
     const tilt = new Tilt();
     tilt.start();
+    let duckModel: import("@/lib/water/duck-model").DuckModel | null = null;
+    let disposed = false;
+    import("@/lib/water/duck-model").then(async ({ DuckModel }) => {
+      if (disposed) return;
+      const model = new DuckModel();
+      duckModel = model;
+      await model.load();
+      if (disposed) model.dispose();
+    }).catch((error) => console.warn("A térbeli kacsa nem tölthető be", error));
 
     let sim = new WaterSim(2, 2);
     const rain = new Rainfall();
@@ -258,7 +267,9 @@ export function WaterApp() {
 
         drawUnder(underCtx, world.things, underScale, tilt.value, s.depth);
         renderer.uploadObjects(world.things.length ? under : null);
-        drawSurface(topCtx, world.things, dpr, tilt.value);
+        const duck = duckModel;
+        drawSurface(topCtx, world.things, dpr, tilt.value,
+          duck?.ready ? (ctx, t, lean) => duck.draw(ctx, t, lean, s.light) : undefined);
 
         const liq = LIQUIDS[s.liquid] ?? { hex: "transparent" };
         renderer.draw({
@@ -297,6 +308,8 @@ export function WaterApp() {
     document.addEventListener("visibilitychange", wake);
 
     return () => {
+      disposed = true;
+      duckModel?.dispose();
       cancelAnimationFrame(raf);
       tilt.stop();
       window.removeEventListener("resize", resize);
