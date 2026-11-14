@@ -14,9 +14,9 @@ const THINGS: { kind: Kind; label: string; icon: string }[] = [
   { kind: "boat", label: "Hajó", icon: "⛵" },
   { kind: "ball", label: "Labda", icon: "🏐" },
   { kind: "ring", label: "Úszógumi", icon: "🛟" },
-  { kind: "koi", label: "Koi", icon: "🐠" },
+  { kind: "koi", label: "Bohóchal", icon: "🐠" },
   { kind: "tang", label: "Kék hal", icon: "🐟" },
-  { kind: "perch", label: "Csíkos hal", icon: "🐡" },
+  { kind: "perch", label: "Zöld hal", icon: "🐡" },
   { kind: "shark", label: "Cápa", icon: "🦈" },
 ];
 
