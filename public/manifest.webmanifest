@@ -1,6 +1,6 @@
 {
-  "name": "Víztükör",
-  "short_name": "Víztükör",
+  "name": "PocketRippleLab",
+  "short_name": "PocketRippleLab",
   "start_url": "/",
   "display": "fullscreen",
   "orientation": "any",

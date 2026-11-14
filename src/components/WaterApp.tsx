@@ -405,7 +405,7 @@ export function WaterApp() {
       {!started && !failed && (
         <div className="welcome-veil">
           <div className="glass-card max-w-sm text-center">
-            <h1 className="font-display text-4xl text-primary text-glow">Víztükör</h1>
+            <h1 className="font-display text-4xl text-primary text-glow">PocketRippleLab</h1>
             <p className="mt-3 text-muted-foreground">
               Érintsd meg a vizet, és nézd, ahogy fodrozódik. A beállításokhoz tartsd nyomva a{" "}
               <b className="text-foreground">jobb felső sarkot</b> 3 másodpercig.
