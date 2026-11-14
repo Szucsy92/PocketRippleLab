@@ -1,14 +1,15 @@
 import { clamp } from "./math";
-import { FISH_PIVOT, FISH_SHEET, sprite } from "./sprites";
+import { FISH_SHEET, SHARK_BITE, sprite } from "./sprites";
 import { isFish, type FishKind, type Thing } from "./things";
 
 type V = { x: number; y: number };
 
 /** Drawn body length (nose to tail tip) in fish radii, and body half-width as a fraction of that length. */
+const CLOWN_LOOK = { len: 2.8, half: 0.2 }; // the three clown fish are identical apart from colour
 const LOOK: Record<FishKind, { len: number; half: number }> = {
-  koi: { len: 2.8, half: 0.2 },
-  tang: { len: 2.5, half: 0.22 },
-  perch: { len: 2.7, half: 0.18 },
+  koi: CLOWN_LOOK,
+  tang: CLOWN_LOOK,
+  perch: CLOWN_LOOK,
   shark: { len: 3.4, half: 0.3 },
 };
 
@@ -19,6 +20,26 @@ function scratchCanvas(w: number, h: number) {
   if (!scratch) scratch = document.createElement("canvas");
   if (scratch.width !== w || scratch.height !== h) { scratch.width = w; scratch.height = h; }
   return scratch;
+}
+
+/** Composes one pose on the scratch canvas, tints it toward the water colour with depth (keeping it opaque) and draws it centred on the pivot. */
+function drawCell(ctx: CanvasRenderingContext2D, _img: HTMLImageElement, sh: { cw: number; ch: number }, z: number, k: number, paint: (c2: CanvasRenderingContext2D) => void) {
+  const sc = scratchCanvas(sh.cw, sh.ch);
+  const c2 = sc.getContext("2d");
+  if (!c2) return;
+  c2.setTransform(1, 0, 0, 1, 0, 0);
+  c2.globalCompositeOperation = "source-over";
+  c2.globalAlpha = 1;
+  c2.clearRect(0, 0, sh.cw, sh.ch);
+  paint(c2);
+  if (z > 0.05) {
+    c2.globalAlpha = 1;
+    c2.globalCompositeOperation = "source-atop";
+    c2.fillStyle = `rgba(${DEEP},${0.42 * z})`;
+    c2.fillRect(0, 0, sh.cw, sh.ch);
+  }
+  ctx.globalAlpha = 1;
+  ctx.drawImage(sc, 0, 0, sh.cw, sh.ch, (-sh.cw * k) / 2, (-sh.ch * k) / 2, sh.cw * k, sh.ch * k);
 }
 
 /** Which sheet cells make up a fish's current pose (pure). */
@@ -34,8 +55,8 @@ export function fishPose(t: Pick<Thing, "turn" | "speed" | "tail" | "side">, col
 }
 
 /**
- * One fish from its sprite sheet. Deeper fish are smaller, bluer, fainter and drift more with the view tilt
- * (parallax) and the wave slope (refraction); fish at the surface are crisp, foamy and gulp.
+ * One fish from its sprite sheet. Deeper fish are smaller, bluer and drift more with the view tilt
+ * (parallax) and the wave slope (refraction). Fish are always fully opaque; nothing is drawn but the baked animation.
  */
 export function drawFish(ctx: CanvasRenderingContext2D, t: Thing, tilt: V) {
   const kind = t.kind;
@@ -52,14 +73,16 @@ export function drawFish(ctx: CanvasRenderingContext2D, t: Thing, tilt: V) {
   ctx.rotate(t.angle);
   ctx.scale(s, mirror ? -s : s);
 
-  if (img) {
-    const sc = scratchCanvas(sh.cw, sh.ch);
-    const c2 = sc.getContext("2d");
-    if (c2) {
-      c2.setTransform(1, 0, 0, 1, 0, 0);
-      c2.globalCompositeOperation = "source-over";
-      c2.globalAlpha = 1;
-      c2.clearRect(0, 0, sh.cw, sh.ch);
+  // The shark's bite is its own baked sequence (two snaps); it plays from the moment the bite starts.
+  const biting = kind === "shark" && t.bite > 0;
+  const bimg = biting ? sprite(SHARK_BITE.url) : null;
+  if (bimg) {
+    const n = clamp(Math.floor((1 - t.bite) * SHARK_BITE.frames), 0, SHARK_BITE.frames - 1);
+    drawCell(ctx, bimg, SHARK_BITE, z, k, (c2) => {
+      c2.drawImage(bimg, (n % SHARK_BITE.cols) * SHARK_BITE.cw, Math.floor(n / SHARK_BITE.cols) * SHARK_BITE.ch, SHARK_BITE.cw, SHARK_BITE.ch, 0, 0, SHARK_BITE.cw, SHARK_BITE.ch);
+    });
+  } else if (img) {
+    drawCell(ctx, img, sh, z, k, (c2) => {
       const cell = (col: number, row: number, alpha: number) => {
         c2.globalAlpha = alpha;
         c2.drawImage(img, col * sh.cw, row * sh.ch, sh.cw, sh.ch, 0, 0, sh.cw, sh.ch);
@@ -67,44 +90,7 @@ export function drawFish(ctx: CanvasRenderingContext2D, t: Thing, tilt: V) {
       if (amp < 0.98) cell(0, sh.rows, 1);
       cell(colA, bendRow, amp);
       if (f > 0.02) cell(colB, bendRow, amp * f);
-      if (z > 0.05) {
-        c2.globalAlpha = 1;
-        c2.globalCompositeOperation = "source-atop";
-        c2.fillStyle = `rgba(${DEEP},${0.6 * z})`;
-        c2.fillRect(0, 0, sh.cw, sh.ch);
-      }
-      ctx.globalAlpha = 0.97 - 0.45 * z;
-      ctx.drawImage(sc, 0, 0, sh.cw, sh.ch, (-sh.cw * k) / 2, (-sh.ch * k) / 2, sh.cw * k, sh.ch * k);
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  const surf = clamp(1 - z / 0.2, 0, 1);
-  if (surf > 0) {
-    // Surface contact: a thin foam ring round the body; the shark's fin trails a foamy V.
-    ctx.strokeStyle = `rgba(255,255,255,${0.22 * surf})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(-0.056 * len, 0, len * 0.47, len * look.half * 0.95, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    if (kind === "shark" && t.speed > 20) {
-      ctx.strokeStyle = `rgba(255,255,255,${0.35 * surf})`;
-      ctx.lineWidth = 3;
-      ctx.lineCap = "round";
-      for (const d of [-1, 1]) {
-        ctx.beginPath();
-        ctx.moveTo(-0.08 * len, 0);
-        ctx.lineTo(-0.08 * len - t.r * 1.3, d * t.r * 0.5);
-        ctx.stroke();
-      }
-    }
-  }
-  if (t.bite > 0 && kind !== "shark") {
-    // Gulp at the surface: a small round mouth.
-    ctx.fillStyle = "rgba(70,15,25,0.8)";
-    ctx.beginPath();
-    ctx.ellipse(FISH_PIVOT * len * 0.97, 0, len * 0.035 * t.bite, len * 0.03 * t.bite, 0, 0, Math.PI * 2);
-    ctx.fill();
+    });
   }
   ctx.restore();
 }

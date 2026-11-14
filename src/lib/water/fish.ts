@@ -4,9 +4,9 @@ import { isFish, type FishKind, type Thing, type Touch, type World } from "./thi
 
 /** Fish personalities: cruise/flee speeds. Only the shark hunts a moving finger. */
 export const FISH_SPEED: Record<FishKind, { cruise: number; flee: number }> = {
-  koi: { cruise: 45, flee: 420 },
+  koi: { cruise: 55, flee: 480 },
   tang: { cruise: 55, flee: 480 },
-  perch: { cruise: 60, flee: 500 },
+  perch: { cruise: 55, flee: 480 },
   shark: { cruise: 70, flee: 0 },
 };
 
@@ -41,9 +41,9 @@ export function fishIntent(kind: FishKind, fx: number, fy: number, touches: Touc
 
 /** Fish personalities beyond speed: turning, schooling, how often they surface, rest or investigate, and depth range. */
 export const FISH_TRAIT: Record<FishKind, { turn: number; school: number; surface: number; rest: number; curious: number; zMin: number; zMax: number }> = {
-  koi: { turn: 1.9, school: 0.5, surface: 0.3, rest: 0.18, curious: 0.3, zMin: 0.3, zMax: 0.8 },
-  tang: { turn: 2.8, school: 1, surface: 0.2, rest: 0.1, curious: 0.2, zMin: 0.3, zMax: 0.85 },
-  perch: { turn: 2.6, school: 0.8, surface: 0.22, rest: 0.15, curious: 0.25, zMin: 0.4, zMax: 0.9 },
+  koi: { turn: 2.4, school: 0.8, surface: 0.22, rest: 0.14, curious: 0.25, zMin: 0.35, zMax: 0.85 },
+  tang: { turn: 2.4, school: 0.8, surface: 0.22, rest: 0.14, curious: 0.25, zMin: 0.35, zMax: 0.85 },
+  perch: { turn: 2.4, school: 0.8, surface: 0.22, rest: 0.14, curious: 0.25, zMin: 0.35, zMax: 0.85 },
   shark: { turn: 1.5, school: 0, surface: 0.07, rest: 0.05, curious: 0.35, zMin: 0.55, zMax: 0.95 },
 };
 
@@ -229,7 +229,7 @@ export function updateFish(t: Thing, kind: FishKind, world: World, sim: WaterSim
   if (t.z <= 0 || t.z >= 1) t.zv = 0;
 
   // At the surface: gulps ring the water, a moving fish leaves a faint wake, then it dives back.
-  t.bite = Math.max(0, t.bite - dt * 3);
+  t.bite = Math.max(0, t.bite - dt * (kind === "shark" ? 1 / 1.17 : 3)); // the shark's bite plays its 1.17 s "ham, ham" sequence
   if (t.z < 0.1) {
     t.popT -= dt;
     if (t.popT <= 0) {

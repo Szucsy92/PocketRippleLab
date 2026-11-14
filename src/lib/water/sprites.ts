@@ -3,6 +3,7 @@ import koiUrl from "../../assets/sprites/koi.webp";
 import tangUrl from "../../assets/sprites/tang.webp";
 import perchUrl from "../../assets/sprites/perch.webp";
 import sharkUrl from "../../assets/sprites/shark.webp";
+import sharkBiteUrl from "../../assets/sprites/shark_bite.webp";
 import ball0Url from "../../assets/sprites/ball0.webp";
 import ball1Url from "../../assets/sprites/ball1.webp";
 import ballShadeUrl from "../../assets/sprites/ball_shade.webp";
@@ -18,13 +19,16 @@ import boatUrl from "../../assets/sprites/boat.webp";
 
 /** Fish sheet: `cols` tail-beat phases x `rows` bend levels (0 = straight, 2 = hard turn, banked), plus one still frame at (col 0, row `rows`). */
 export type FishSheet = { url: string; cw: number; ch: number; cols: number; rows: number; lenPx: number };
-const CLOWN = { cw: 256, ch: 176, cols: 8, rows: 3, lenPx: 224 };
+/** Baked from the real skeletal animations of the clown fish / shark FBX (tools/sprites/bake_anim.py). The three clown fish are one model in three colours: original, purple (`tang`) and yellow (`perch`). */
+const CLOWN = { cw: 288, ch: 208, cols: 8, rows: 3, lenPx: 224 };
 export const FISH_SHEET: Record<FishKind, FishSheet> = {
   koi: { url: koiUrl, ...CLOWN },
   tang: { url: tangUrl, ...CLOWN },
   perch: { url: perchUrl, ...CLOWN },
   shark: { url: sharkUrl, cw: 480, ch: 256, cols: 8, rows: 3, lenPx: 400 },
 };
+/** Shark bite ("ham, ham"): two jaw snaps from the rig's bite clip, the shark rolled to show its teeth; `frames` in `cols` columns, same scale as the shark sheet. */
+export const SHARK_BITE = { url: sharkBiteUrl, cw: 512, ch: 352, cols: 7, frames: 28, lenPx: 400, seconds: 1.17 };
 /** The body is this fraction of its length behind the nose at the rotation pivot (sprite centre). */
 export const FISH_PIVOT = 0.444;
 
@@ -59,6 +63,6 @@ export function preloadKind(kind: Kind, skin = 0) {
   if (kind === "ball") urls.push(BALL.urls[skin] ?? BALL.urls[0] ?? "", BALL.shade);
   else if (kind === "ring") urls.push(RING.urls[skin] ?? RING.urls[0] ?? "");
   else if (kind === "duck" || kind === "boat") urls.push(HEADING[kind].url);
-  else urls.push(FISH_SHEET[kind].url);
+  else { urls.push(FISH_SHEET[kind].url); if (kind === "shark") urls.push(SHARK_BITE.url); }
   for (const u of urls) if (u) sprite(u);
 }
