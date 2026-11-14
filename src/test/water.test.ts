@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { BACKGROUNDS, LIQUIDS, DEFAULT_SETTINGS, SETTINGS_HOLD_MS, MOODS, applyMood, clampSettings, lightFromDisk, WATER_COLORS } from "../lib/water/settings";
 import { WaterSim } from "../lib/water/sim";
 import { Rainfall } from "../lib/water/rain";
@@ -72,7 +72,7 @@ describe("Water rules", () => {
     expect(sim.cur[20 * 41 + 20 + 13]).toBe(0);
   });
 });
-import { PHYS, fishIntent, makeThing, SIZE_FACTOR } from "../lib/water/objects";
+import { PHYS, fishIntent, fishDecision, makeThing, updateThings, drawSurface, drawUnder, headingFrame, fishPose, FISH_SHEET, BALL, HEADING, SIZE_FACTOR, FISH, type Kind, type World } from "../lib/water/objects";
 describe("Toys", () => {
   it("offers 4 toys and 4 fish incl. a shark", () => expect(Object.keys(PHYS).sort()).toEqual(["ball", "boat", "duck", "koi", "perch", "ring", "shark", "tang"]));
   it("makes things 3x bigger", () => { expect(SIZE_FACTOR).toBe(3); expect(makeThing("ball", 0, 0, 1).r).toBeGreaterThan(20 * 3 * 0.9); });
@@ -87,5 +87,129 @@ describe("Toys", () => {
   it("carries light toys further than heavy ones", () => {
     expect(PHYS.ball.push).toBeGreaterThan(PHYS.duck.push);
     expect(PHYS.ring.push).toBeGreaterThan(PHYS.boat.push);
+  });
+});
+
+describe("Fish behaviour", () => {
+  const world = (): World => ({ things: [], width: 460, height: 800, cell: 2.3, tilt: { x: 0, y: 0 }, touches: [] });
+  const run = (w: World, sim: WaterSim, seconds: number, each: () => void) => {
+    for (let i = 0; i < seconds * 30; i++) { updateThings(w, sim, 1 / 30); sim.step(); each(); }
+  };
+  it("sometimes surfaces, sometimes swims deep", () => {
+    let seed = 7;
+    const rnd = vi.spyOn(Math, "random").mockImplementation(() => (seed = (seed * 16807) % 2147483647) / 2147483647);
+    const w = world(), sim = new WaterSim(200, 360);
+    const koi = makeThing("koi", 200, 400, 1);
+    w.things.push(koi);
+    let lo = 1, hi = 0;
+    run(w, sim, 120, () => { lo = Math.min(lo, koi.z); hi = Math.max(hi, koi.z); });
+    rnd.mockRestore();
+    expect(lo).toBeLessThan(0.15);
+    expect(hi).toBeGreaterThan(0.6);
+  });
+  it("turns at a limited rate and stays inside the pool", () => {
+    let seed = 3;
+    const rnd = vi.spyOn(Math, "random").mockImplementation(() => (seed = (seed * 16807) % 2147483647) / 2147483647);
+    const w = world(), sim = new WaterSim(200, 360);
+    for (const k of FISH) w.things.push(makeThing(k, 230, 400, 1));
+    let maxTurn = 0, out = 0;
+    const prev = new Map<number, number>();
+    run(w, sim, 60, () => {
+      for (const t of w.things) {
+        const p = prev.get(t.id);
+        if (p !== undefined) maxTurn = Math.max(maxTurn, Math.abs(Math.atan2(Math.sin(t.angle - p), Math.cos(t.angle - p))) * 30);
+        prev.set(t.id, t.angle);
+        if (t.x < 0 || t.x > w.width || t.y < 0 || t.y > w.height || !Number.isFinite(t.z)) out++;
+        expect(t.z).toBeGreaterThanOrEqual(0);
+        expect(t.z).toBeLessThanOrEqual(1);
+      }
+    });
+    rnd.mockRestore();
+    expect(maxTurn).toBeLessThan(11); // flee: 2.8 rad/s * 3.5
+    expect(out).toBe(0);
+  });
+  it("a scared fish dives", () => {
+    const w = world(), sim = new WaterSim(200, 360);
+    const f = makeThing("tang", 200, 400, 1);
+    f.z = f.zGoal = 0.05;
+    w.things.push(f);
+    w.touches = [{ x: 260, y: 400, speed: 400 }];
+    run(w, sim, 2, () => {});
+    expect(f.z).toBeGreaterThan(0.5);
+  });
+  it("a gentle fish rises to a still finger", () => {
+    const w = world(), sim = new WaterSim(200, 360);
+    const f = makeThing("koi", 200, 400, 1);
+    f.z = f.zGoal = 0.8;
+    w.things.push(f);
+    w.touches = [{ x: 330, y: 400, speed: 0 }];
+    run(w, sim, 3, () => {});
+    expect(f.z).toBeLessThan(0.3);
+  });
+  it("decides by trait: the shark rarely surfaces, nobody inspects without a target", () => {
+    expect(fishDecision("koi", 0.1, 0.5, false).action).toBe("surface");
+    expect(fishDecision("shark", 0.1, 0.5, false).action).not.toBe("surface");
+    expect(fishDecision("koi", 0.6, 0.5, false).action).toBe("swim");
+    expect(fishDecision("koi", 0.55, 0.5, true).action).toBe("inspect");
+  });
+  it("fish at very different depths do not bump", () => {
+    const w = world(), sim = new WaterSim(200, 360);
+    const a = makeThing("koi", 200, 400, 1), b = makeThing("koi", 205, 400, 1);
+    a.z = a.zGoal = 0.1; b.z = b.zGoal = 0.9;
+    w.things.push(a, b);
+    updateThings(w, sim, 1 / 60);
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeLessThan(20);
+  });
+});
+
+describe("Photoreal sprites", () => {
+  const world = (): World => ({ things: [], width: 460, height: 800, cell: 2.3, tilt: { x: 0, y: 0 }, touches: [] });
+  const fakeCtx = () => {
+    const calls: string[] = [];
+    const ctx = new Proxy({ canvas: { width: 460, height: 800 } } as Record<string, unknown>, {
+      get: (o, k: string) => (k in o ? o[k] : (...a: unknown[]) => { calls.push(k); return k.startsWith("create") ? { addColorStop: () => {} } : a[0]; }),
+      set: (o, k: string, v) => { o[k] = v; return true; },
+    });
+    return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
+  };
+  it("draws every kind without errors, also before the sprites have loaded", () => {
+    const w = world(), sim = new WaterSim(200, 360);
+    for (const k of ["duck", "boat", "ball", "ring", ...FISH] as Kind[]) w.things.push(makeThing(k, 200, 300, 1));
+    updateThings(w, sim, 1 / 60);
+    const { ctx } = fakeCtx();
+    expect(() => { drawUnder(ctx, w.things, 1); drawSurface(ctx, w.things, 2, { x: 0.2, y: -0.1 }); }).not.toThrow();
+  });
+  it("picks the nearest pre-rendered heading", () => {
+    expect(headingFrame(0, 16)).toEqual({ idx: 0, rest: 0 });
+    expect(headingFrame(Math.PI, 16).idx).toBe(8);
+    expect(headingFrame(-0.1, 16).idx).toBe(0);
+    expect(headingFrame(Math.PI * 2 - 0.05, 16).idx).toBe(0);
+    const h = headingFrame(0.3, 16);
+    expect(Math.abs(h.rest)).toBeLessThan(Math.PI / 16 + 1e-9);
+  });
+  it("describes fish poses: bank by turn, mirror by side, still tail when hovering", () => {
+    const base = { turn: 0, speed: 60, tail: 0, side: -1 };
+    expect(fishPose(base, 8).bendRow).toBe(0);
+    expect(fishPose({ ...base, turn: 1 }, 8).bendRow).toBe(1);
+    expect(fishPose({ ...base, turn: -5 }, 8).bendRow).toBe(2);
+    expect(fishPose({ ...base, side: 1 }, 8).mirror).toBe(true);
+    expect(fishPose({ ...base, side: 1 }, 8).colA).toBe(4); // mirrored pose = opposite tail phase
+    expect(fishPose({ ...base, speed: 0 }, 8).amp).toBeLessThan(0.3);
+    expect(fishPose({ ...base, speed: 0, turn: 3 }, 8).amp).toBe(1); // no ghosting while turning
+    expect(fishPose({ ...base, tail: Math.PI }, 8).colA).toBe(4);
+  });
+  it("describes sprite sheets consistently", () => {
+    for (const k of FISH) { expect(FISH_SHEET[k].cols * FISH_SHEET[k].cw).toBeLessThanOrEqual(4096); expect(FISH_SHEET[k].lenPx).toBeLessThan(FISH_SHEET[k].cw); }
+    expect(BALL.urls).toHaveLength(2);
+    expect(HEADING.duck.frames).toBe(HEADING.duck.cols * 2);
+    expect(HEADING.boat.frames).toBe(HEADING.boat.cols * 2);
+  });
+  it("a ball rolls in its direction of travel", () => {
+    const w = world(), sim = new WaterSim(200, 360);
+    const b = makeThing("ball", 200, 300, 1);
+    b.vx = 0; b.vy = 300; w.things.push(b);
+    for (let i = 0; i < 10; i++) updateThings(w, sim, 1 / 30);
+    expect(Math.cos(b.angle - Math.atan2(b.vy, b.vx))).toBeGreaterThan(0.9);
+    expect(b.spin).toBeGreaterThan(0.5);
   });
 });
