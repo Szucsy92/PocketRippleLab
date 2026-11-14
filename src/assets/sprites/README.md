@@ -4,7 +4,8 @@ Előre renderelt, felülnézeti sprite-ok (orr / orrfék a +x irányban). Lásd 
 
 | Fájl | Tartalom |
 | --- | --- |
-| `shark.webp`, `koi.webp`, `tang.webp`, `perch.webp` | hal-lapok: 8 farokcsapás-fázis × 3 kanyar-szint (dőlve) + 1 nyugvó kép |
+| `shark.webp`, `koi.webp`, `tang.webp`, `perch.webp` | hal-lapok: 8 farokcsapás-fázis × 3 kanyar-szint (dőlve) + 1 nyugvó kép. A farokcsapás a modellek valódi csontváz-animációja (`tools/sprites/bake_anim.py`). `koi` = eredeti, `tang` = lila, `perch` = sárga bohóchal (ugyanaz a modell) |
+| `shark_bite.webp` | cápa-harapás: 28 kép (7 oszlop), két csattintás („ham, ham”), a cápa oldalra dőlve, hogy a fogak látszanak |
 | `ball0.webp`, `ball1.webp` | strandlabda, 16 gördülés-kép egy sorban |
 | `ball_shade.webp` | labda fény-/csillogásréteg `[árnyék \| csillogás]` |
 | `ring0.webp`, `ring1.webp` | mentőgyűrű (narancs, kék) |
