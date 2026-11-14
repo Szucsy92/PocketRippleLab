@@ -110,17 +110,17 @@ export type World = {
   touches: Touch[];
 };
 
-const G = 900;
+
 
 export function updateThings(world: World, sim: WaterSim, dt: number) {
-  const { things, width, height, cell, tilt } = world;
+  const { things, width, height, cell } = world;
   for (const t of things) {
     if (isFish(t.kind)) { updateFish(t, t.kind, world, sim, dt); continue; }
     const sx = t.x / cell, sy = t.y / cell;
     t.phase += dt;
     const [gx, gy] = sim.gradient(sx, sy);
     // Rocking spring: wave slope and tilt tip the toy; it settles slowly.
-    const tx = -gx * 0.9 + tilt.x * 0.35, ty = -gy * 0.9 + tilt.y * 0.35;
+    const tx = -gx * 0.9, ty = -gy * 0.9;
     t.rockVX += ((tx - t.rockX) * 60 - t.rockVX * 3.2) * dt;
     t.rockVY += ((ty - t.rockY) * 60 - t.rockVY * 3.2) * dt;
     t.rockX = Math.max(-0.6, Math.min(0.6, t.rockX + t.rockVX * dt));
@@ -130,8 +130,8 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
     const ph = PHYS[t.kind];
     const [fx, fy] = sim.flow(sx, sy);
     // Wave push grows with the crest's slope, so bigger sweeps carry toys further.
-    const ax = -gx * ph.push + tilt.x * G * 0.55 + fx * cell * ph.flow;
-    const ay = -gy * ph.push + tilt.y * G * 0.55 + fy * cell * ph.flow;
+    const ax = -gx * ph.push + fx * cell * ph.flow;
+    const ay = -gy * ph.push + fy * cell * ph.flow;
     t.lift += (sim.sample(sx, sy) - t.lift) * Math.min(1, dt * 12);
     const sp0 = Math.hypot(t.vx, t.vy);
     t.wakeT -= dt;
@@ -142,10 +142,11 @@ export function updateThings(world: World, sim: WaterSim, dt: number) {
 
     t.vx += ax * dt;
     t.vy += ay * dt;
-    const k = Math.exp(-ph.drag * dt);
+    // Water resistance: linear plus quadratic, so fast throws slow quickly then glide.
+    const k = Math.exp(-(ph.drag * 0.8 + sp0 * 0.0016) * dt);
     t.vx *= k; t.vy *= k;
     const sp = Math.hypot(t.vx, t.vy);
-    if (sp > 1400) { t.vx *= 1400 / sp; t.vy *= 1400 / sp; }
+    if (sp > 2200) { t.vx *= 2200 / sp; t.vy *= 2200 / sp; }
     t.x += t.vx * dt;
     t.y += t.vy * dt;
 
