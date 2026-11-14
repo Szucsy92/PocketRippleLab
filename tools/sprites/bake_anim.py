@@ -11,6 +11,7 @@ OUT='../../src/assets/sprites'; SRC='../../assets-src'
 CLOWN_FBX=f'{SRC}/clown/source/cab939cb4ecb4ab583940af6e5c384c5.fbx.fbx'
 SHARK_FBX=f'{SRC}/shark/source/Realistic Shark.fbx'
 PH=8
+CLOWN_PHASES=24
 
 def samp(img,u,v):
     h,w=img.shape[:2]
@@ -20,10 +21,10 @@ def tex_gray(path): return cv2.imread(path,0).astype(np.float32)/255
 
 class Mat:
     """Per-part material: albedo/alpha/spec/bump are functions of (u,v) -> full-frame arrays."""
-    def __init__(s,albedo,alpha=None,spec=0.4,rough=0.4,bump=None,bump_k=0.0,**shade_kw):
-        s.albedo=albedo; s.alpha=alpha; s.spec=spec; s.rough=rough; s.bump=bump; s.bump_k=bump_k; s.kw=shade_kw
+    def __init__(s,albedo,alpha=None,spec=0.4,rough=0.4,bump=None,bump_k=0.0,normal=None,normal_k=1.0,**shade_kw):
+        s.albedo=albedo; s.alpha=alpha; s.spec=spec; s.rough=rough; s.bump=bump; s.bump_k=bump_k; s.normal=normal; s.normal_k=normal_k; s.kw=shade_kw
 class Soup:
-    def __init__(s,P,N,UV,mat): s.P,s.N,s.UV,s.mat=P,N,UV,mat
+    def __init__(s,P,N,UV,mat,T=None): s.P,s.N,s.UV,s.mat,s.T=P,N,UV,mat,T
 
 def render(soups,W,H,scale,ss=SS,light=LIGHT):
     """soups: list of Soup in canonical coords (x fwd, y left, z up) centred on the pivot -> RGBA uint8 (H,W,4)."""
@@ -33,6 +34,8 @@ def render(soups,W,H,scale,ss=SS,light=LIGHT):
     Ps=np.stack([P[...,0]*scale*ss+Ws/2,-P[...,1]*scale*ss+Hs/2,P[...,2]],-1)
     Ns=np.stack([N[...,0],-N[...,1],N[...,2]],-1)
     A=np.zeros(P.shape[:2]+(8,),np.float32); A[...,0:3]=Ns; A[...,3:5]=UV
+    if all(s.T is not None for s in soups):
+        Tt=np.concatenate([s.T for s in soups]); A[...,5]=Tt[...,0]; A[...,6]=-Tt[...,1]
     out=rasterize(Ps,A,tid,Ws,Hs)
     Z=out[...,0]; m=Z>-1e29
     n=out[...,1:4].copy(); u=np.nan_to_num(out[...,4]); v=np.nan_to_num(out[...,5]); T=np.rint(out[...,6]).astype(int)
@@ -46,7 +49,12 @@ def render(soups,W,H,scale,ss=SS,light=LIGHT):
         al=np.ones((Hs,Ws),np.float32) if mt.alpha is None else mt.alpha(u,v)
         alpha[mk]=al[mk]
         sp=mt.spec(u,v) if callable(mt.spec) else np.full((Hs,Ws),mt.spec,np.float32); spec[mk]=sp[mk]
-        rough[mk]=mt.rough
+        rough[mk]=(mt.rough(u,v)[mk] if callable(mt.rough) else mt.rough)
+        if mt.normal is not None and s.T is not None:
+            tx,ty=out[...,7],out[...,8]; tz=-(tx*n[...,0]+ty*n[...,1])/np.maximum(n[...,2],0.15)
+            Tv=np.stack([tx,ty,tz],-1); Tv-=n*(Tv*n).sum(-1,keepdims=True); Tv/=np.maximum(np.linalg.norm(Tv,axis=-1,keepdims=True),1e-6)
+            Bv=np.cross(n,Tv); nm=mt.normal(u,v); nn=Tv*nm[...,0:1]*mt.normal_k+Bv*nm[...,1:2]*mt.normal_k+n*nm[...,2:3]
+            nn/=np.maximum(np.linalg.norm(nn,axis=-1,keepdims=True),1e-6); n[mk]=nn[mk]
         if mt.bump is not None and mt.bump_k>0:
             h=cv2.GaussianBlur(mt.bump(u,v).astype(np.float32),(0,0),0.7*ss/3)
             gy,gx=np.gradient(h); nn=n.copy(); nn[...,0]-=mt.bump_k*gx*ss; nn[...,1]-=mt.bump_k*gy*ss
@@ -91,7 +99,7 @@ def eye_mask(tex):
         r=max(st[i,2],st[i,3])*1.05+8; cv2.circle(m,(int(cen[i][0]),int(cen[i][1])),int(r),1.0,-1)
     return cv2.GaussianBlur(m,(0,0),3)
 
-CLOWN_AMP=0.6
+CLOWN_AMP=1.0   # the clip exactly as authored
 def tail_twist(deg,start=0.74):
     """Rolls the caudal peduncle + fin about the spine in the bind pose (before skinning), so the vertical tail fin
     fans out when seen from above. Works in the bind world space of the FBX (nose = +z)."""
@@ -102,7 +110,7 @@ def tail_twist(deg,start=0.74):
         Pw=Pw.copy(); Pw[:,0]=x*c-y*sn; Pw[:,1]=x*sn+y*c+y0
         return (np.linalg.inv(part.MG)@Pw.T).T
     return fn
-CLOWN_TWIST=38.0
+CLOWN_TWIST=0.0
 def clown_soups(sc,part,t,stack,tex,opac,bump,refl,amp=None):
     P,N,UV=pose(sc,part,stack,t,amp=CLOWN_AMP if amp is None else amp,twist=tail_twist(CLOWN_TWIST))
     canon=lambda p: np.stack([p[...,2],-p[...,0],-p[...,1]],-1)   # nose = +z, back = -y (seen from above)
@@ -123,26 +131,28 @@ def bake_clown(preview=False):
     # extents of the bind pose (straight fish) fix scale and pivot for every frame
     Pb,Nb,UVb=clown_soups(sc,part,0,None,None,None,None,None)
     xn,xt=float(Pb[...,0].max()),float(Pb[...,0].min()); Lm=xn-xt; pivot=xn-0.444*Lm
-    Lpx,cw,ch=224,288,208; scale=Lpx/Lm
+    Lpx,cw,ch=224,352,256; scale=Lpx/Lm
     solid=lambda u,v: smooth(0.30,0.62,samp(opac,u,v))              # solid fish: opaque body and fins
     out={}
     for name,tx in variants.items():
         mat=Mat(lambda u,v,tx=tx: samp(tx,u,v),alpha=solid,spec=lambda u,v: 0.18+0.55*samp(refl,u,v),rough=0.34,
-                bump=lambda u,v: samp(bump,u,v),bump_k=2.2,ambient=0.85,diffuse=0.66,ao_k=0.2,exposure=1.38,refl=0.28)
-        sheet=np.zeros(((3+1)*ch,PH*cw,4),np.uint8)
+                bump=lambda u,v: samp(bump,u,v),bump_k=1.6,ambient=0.9,diffuse=0.7,ao_k=0.12,exposure=1.55,refl=0.3)
+        G=CLOWN_PHASES//PH
+        sheet=np.zeros(((3*G+1)*ch,PH*cw,4),np.uint8)
         rows=[(0.0,0.0),(0.55,9.0),(1.0,18.0)]
         for r,(bm,bk) in enumerate(rows):
-            for k in range(PH):
-                P,N,UV=clown_soups(sc,part,t0+period*k/PH,stack,None,None,None,None)
+            for k in range(CLOWN_PHASES):
+                P,N,UV=clown_soups(sc,part,t0+period*k/CLOWN_PHASES,stack,None,None,None,None)
                 P=P.copy(); P[...,0]-=pivot
                 P,N=deform(P,N,xn-pivot,xt-pivot,0,bm*0.15,0.0,0.0,bank_deg=bk)
-                sheet[r*ch:(r+1)*ch,k*cw:(k+1)*cw]=render([Soup(P,N,UV,mat)],cw,ch,scale)
+                rr=r*G+k//PH; cc=k%PH
+                sheet[rr*ch:(rr+1)*ch,cc*cw:(cc+1)*cw]=render([Soup(P,N,UV,mat)],cw,ch,scale)
             print(name,'row',r,flush=True)
         P,N,UV=clown_soups(sc,part,0,None,None,None,None,None)
         P=P.copy(); P[...,0]-=pivot; P,N=deform(P,N,xn-pivot,xt-pivot,0,0,0.0,0.0,bank_deg=0)
-        sheet[3*ch:4*ch,0:cw]=render([Soup(P,N,UV,mat)],cw,ch,scale)
+        sheet[3*G*ch:(3*G+1)*ch,0:cw]=render([Soup(P,N,UV,mat)],cw,ch,scale)
         save_webp(sheet,f'{OUT}/{name}.webp',q=88)
-        out[name]=dict(name=name,cw=cw,ch=ch,cols=PH,rows=3,lenPx=Lpx,pivot=0.444)
+        out[name]=dict(name=name,cw=cw,ch=ch,cols=PH,rows=3,groups=G,lenPx=Lpx,pivot=0.444)
     return out
 
 # ---------------------------------------------------------------- shark
