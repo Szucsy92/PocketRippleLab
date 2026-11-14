@@ -18,9 +18,10 @@ import boatUrl from "../../assets/sprites/boat.webp";
  */
 
 /** Fish sheet: `cols` tail-beat phases x `rows` bend levels (0 = straight, 2 = hard turn, banked), plus one still frame at (col 0, row `rows`). */
-export type FishSheet = { url: string; cw: number; ch: number; cols: number; rows: number; lenPx: number };
+/** `groups` > 1: the tail-beat has cols x groups phases, stored as `groups` stacked rows per bend level (row = bend * groups + phase / cols). */
+export type FishSheet = { url: string; cw: number; ch: number; cols: number; rows: number; lenPx: number; groups?: number };
 /** Baked from the real skeletal animations of the clown fish / shark FBX (tools/sprites/bake_anim.py). The three clown fish are one model in three colours: original, purple (`tang`) and yellow (`perch`). */
-const CLOWN = { cw: 288, ch: 208, cols: 8, rows: 3, lenPx: 224 };
+const CLOWN = { cw: 352, ch: 256, cols: 8, rows: 3, lenPx: 224, groups: 3 }; // 24 phases = the clip's own 1.4 s loop
 export const FISH_SHEET: Record<FishKind, FishSheet> = {
   koi: { url: koiUrl, ...CLOWN },
   tang: { url: tangUrl, ...CLOWN },
