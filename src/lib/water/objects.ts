@@ -523,7 +523,7 @@ export function drawUnder(ctx: CanvasRenderingContext2D, things: Thing[], scale:
 }
 
 /** Floating toys drawn above the water, leaning in 3D with tilt and waves. */
-export function drawSurface(ctx: CanvasRenderingContext2D, things: Thing[], dpr: number, tilt: V = { x: 0, y: 0 }) {
+export function drawSurface(ctx: CanvasRenderingContext2D, things: Thing[], dpr: number, tilt: V = { x: 0, y: 0 }, duck?: (ctx: CanvasRenderingContext2D, t: Thing, lean: V) => void) {
   const c = ctx.canvas;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, c.width, c.height);
@@ -555,7 +555,8 @@ export function drawSurface(ctx: CanvasRenderingContext2D, things: Thing[], dpr:
     // 3D: foreshorten along the lean, shift the top
     ctx.translate(l.x * t.r * 0.12, l.y * t.r * 0.12);
     ctx.scale(bob * (1 - Math.abs(l.x) * 0.12), bob * (1 - Math.abs(l.y) * 0.12));
-    if (t.kind === "duck") drawDuck(ctx, t, l);
+    if (t.kind === "duck" && duck) duck(ctx, t, l);
+    else if (t.kind === "duck") drawDuck(ctx, t, l);
     else if (t.kind === "boat") drawBoat(ctx, t, l);
     else if (t.kind === "ball") drawBall(ctx, t, l);
     else drawRing(ctx, t, l);

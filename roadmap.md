@@ -3,3 +3,4 @@
 - [x] Suggest the next step after remixing: try it on a real phone, especially tilt and OS child lock.- [x] Compact pop-up settings, new defaults, pool/lake/seabed worlds, tilt edge foam, sun-orb light.
 - [x] Box-view tilt: pool walls, sea/lake relief parallax.
 - [x] 4 úszó hal (koi, kék trópusi, csíkos, cápa): menekülnek / odaúsznak, a cápa üldözi a húzott ujjat; minden tárgy 3× nagyobb
+- [ ] Replace the drawn duck with the uploaded 3D model and original textures; verify top-down appearance and interaction.

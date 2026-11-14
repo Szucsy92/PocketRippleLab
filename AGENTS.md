@@ -33,3 +33,4 @@ use the editor.
 - Fullscreen is an immersive display mode, not an OS child lock; device-level access restrictions must remain explicit.
 - Keep mood parameters in water settings and adaptive rain in a pure water module; this makes behavior testable independently of rendering.
 - Model finger currents as bounded, decaying tangential fields alongside the height-field solver; this couples object drift to touch without destabilizing wave propagation.
+- Load the uploaded duck mesh and original UV textures with a dynamically imported browser-only Three.js renderer, compositing into the existing surface canvas; this preserves wave physics and keeps browser APIs outside SSR.
