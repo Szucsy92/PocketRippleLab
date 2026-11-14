@@ -136,7 +136,7 @@ export function SettingsPanel(props: {
         </Section>
 
         <Section title="Döntés">
-          <Toggle label="A telefon döntése mozgatja a vizet" on={s.tiltOn} onChange={(v) => onChange({ tiltOn: v })} />
+          <Toggle label="Mélységhatás a telefon döntésekor" on={s.tiltOn} onChange={(v) => onChange({ tiltOn: v })} />
           <Button variant="ghost" className="btn-ghost w-full" onClick={props.onLevel}>A mostani helyzet legyen a vízszintes</Button>
         </Section>
 

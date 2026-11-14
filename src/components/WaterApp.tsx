@@ -167,8 +167,12 @@ export function WaterApp() {
       if (p.grab !== null) {
         const t = world.things.find((o) => o.id === p.grab);
         if (t) {
-          t.vx = t.vx * 0.5 + ((x - t.x) / dt) * 0.5;
-          t.vy = t.vy * 0.5 + ((y - t.y) / dt) * 0.5;
+          // Smoothed hand velocity (~60 ms window) so a flick carries its real momentum.
+          const a = Math.min(1, dt / 0.06);
+          t.vx = t.vx * (1 - a) + ((x - t.x) / dt) * a;
+          t.vy = t.vy * (1 - a) + ((y - t.y) / dt) * a;
+          const d = Math.hypot(x - t.x, y - t.y);
+          if (d > world.cell) sim.disturb(toSim(x), toSim(y), Math.max(4, (t.r / world.cell) * 0.9), -Math.min(2.4, d * 0.02));
           t.x = x;
           t.y = y;
           const sp = Math.hypot(t.vx, t.vy);
@@ -200,6 +204,10 @@ export function WaterApp() {
         const t = world.things.find((o) => o.id === p.grab);
         if (t) {
           t.grabbed = null;
+          // Released after a pause: no throw.
+          if (performance.now() - p.t > 90) { t.vx = 0; t.vy = 0; }
+          const sp = Math.hypot(t.vx, t.vy);
+          if (sp > 2200) { t.vx *= 2200 / sp; t.vy *= 2200 / sp; }
           // set down: a splash
           sim.disturb(toSim(t.x), toSim(t.y), Math.max(6, (t.r / world.cell) * 1.5), -6.2);
         }
@@ -242,7 +250,7 @@ export function WaterApp() {
         const py = tilt.value.y * PK;
         const ddx = Math.max(-0.004, Math.min(0.004, px - lastPlane.x));
         const ddy = Math.max(-0.004, Math.min(0.004, py - lastPlane.y));
-        if (Math.abs(ddx) + Math.abs(ddy) > 1e-5) {
+        if (false && Math.abs(ddx) + Math.abs(ddy) > 1e-5) {
           sim.shiftPlane(ddx, ddy);
           slosh = Math.min(1, slosh + (Math.abs(ddx) + Math.abs(ddy)) * 160);
           lastPlane = { x: lastPlane.x + ddx, y: lastPlane.y + ddy };
@@ -285,7 +293,7 @@ export function WaterApp() {
           depth: s.depth,
           light: s.light,
           mood: s.mood === "sea" ? 1 : s.mood === "lake" ? 2 : 0,
-          slosh: s.tiltOn ? slosh : 0,
+          slosh: 0,
           lightGlow,
           parallax: s.tiltOn ? tilt.value : { x: 0, y: 0 },
         });
