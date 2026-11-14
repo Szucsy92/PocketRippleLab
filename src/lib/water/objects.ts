@@ -110,7 +110,7 @@ export type World = {
   touches: Touch[];
 };
 
-const G = 900;
+
 
 export function updateThings(world: World, sim: WaterSim, dt: number) {
   const { things, width, height, cell } = world;
