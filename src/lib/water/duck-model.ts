@@ -44,7 +44,8 @@ export class DuckModel {
     ]);
     this.textures = [map, roughnessMap, normalMap];
     map.colorSpace = THREE.SRGBColorSpace;
-    this.material = new THREE.MeshStandardMaterial({ map, roughnessMap, normalMap, metalness: 0 });
+    const originalMaterial = new THREE.MeshStandardMaterial({ map, roughnessMap, normalMap, metalness: 0 });
+    this.material = originalMaterial;
     model.traverse((node) => {
       if (node instanceof THREE.Mesh) {
         const old = Array.isArray(node.material) ? node.material : [node.material];
@@ -53,7 +54,7 @@ export class DuckModel {
           texture?.dispose();
           material.dispose();
         }
-        node.material = this.material;
+        node.material = originalMaterial;
       }
     });
     // FBXLoader normalizes the source's up axis to Y. View its crown, never its side.
