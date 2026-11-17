@@ -78,10 +78,6 @@ export function updateFish(t: Thing, kind: FishKind, world: World, sim: WaterSim
   const h = Math.abs(sim.sample(sx, sy));
   const [gx, gy] = sim.gradient(sx, sy);
   const [fx, fy] = sim.flow(sx, sy);
-  // Wave slope refracts the fish image (smoothed; used by the drawing).
-  const ks = Math.min(1, dt * 8);
-  t.rockX += (clamp(-gx * 0.9, -0.6, 0.6) - t.rockX) * ks;
-  t.rockY += (clamp(-gy * 0.9, -0.6, 0.6) - t.rockY) * ks;
   // Rough water scares the gentle fish; deep fish feel the surface less.
   if (kind !== "shark") t.fear = Math.min(1, t.fear + Math.max(0, h * (1 - 0.5 * t.z) - 0.8) * dt * 3);
   t.fear *= Math.exp(-dt * 0.8);

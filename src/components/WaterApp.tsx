@@ -3,7 +3,8 @@ import { WaterSim } from "@/lib/water/sim";
 import { WaterRenderer } from "@/lib/water/renderer";
 import { Tilt } from "@/lib/water/tilt";
 import { Rainfall } from "@/lib/water/rain";
-import { drawSurface, drawUnder, isFloating, makeThing, updateThings, type Kind, type World } from "@/lib/water/objects";
+import { drawUnder, eyeFor, isFloating, makeThing, tumble, updateThings, type Kind, type World } from "@/lib/water/objects";
+import { ObjectRenderer } from "@/lib/water/gl/renderer3d";
 import {
   BACKGROUNDS,
   GLOWS,
@@ -62,17 +63,23 @@ export function WaterApp() {
       setFailed(true);
       return;
     }
-    const topCtx = top.getContext("2d");
+    let objects: ObjectRenderer;
+    try {
+      objects = new ObjectRenderer(top);
+    } catch {
+      setFailed(true);
+      return;
+    }
     const under = document.createElement("canvas");
     const underCtx = under.getContext("2d");
-    if (!topCtx || !underCtx) { setFailed(true); return; }
+    if (!underCtx) { setFailed(true); return; }
     const tilt = new Tilt();
     tilt.start();
 
     let sim = new WaterSim(2, 2);
     const rain = new Rainfall();
     let activeMood: Settings["mood"] = null;
-    const world: World = { things: [], width: 1, height: 1, cell: 1, tilt: tilt.value, touches: [] };
+    const world: World = { things: [], width: 1, height: 1, cell: 1, touches: [] };
     let dpr = 1;
     let underScale = 1;
 
@@ -93,8 +100,7 @@ export function WaterApp() {
       world.height = h;
       world.cell = w / sw;
       renderer.resize(Math.round(w * dpr), Math.round(h * dpr), sw, shh);
-      top.width = Math.round(w * dpr);
-      top.height = Math.round(h * dpr);
+      objects.resize(Math.round(w * dpr), Math.round(h * dpr));
       underScale = Math.min(dpr, 1.25);
       under.width = Math.round(w * underScale);
       under.height = Math.round(h * underScale);
@@ -114,8 +120,8 @@ export function WaterApp() {
       const y = m + Math.random() * (world.height - 2 * m);
       const t = makeThing(k, x, y, objScale());
       world.things.push(t);
-      const big = 7;
-      sim.disturb(x / world.cell, y / world.cell, Math.max(5.5, (t.r / world.cell) * 1.65), -big * 1.45);
+      // Toys are dropped in from above (splash on impact, see body.ts); fish are lowered in with a ripple.
+      if (!isFloating(k)) sim.disturb(x / world.cell, y / world.cell, Math.max(5.5, (t.r / world.cell) * 1.65), -7 * 1.45);
       if (world.things.length > 40) world.things.shift();
     };
     const clear = () => {
@@ -191,8 +197,8 @@ export function WaterApp() {
         const t = world.things.find((o) => o.id === p.grab);
         if (t) {
           t.grabbed = null;
-          // set down: a splash
-          sim.disturb(toSim(t.x), toSim(t.y), Math.max(6, (t.r / world.cell) * 1.5), -6.2);
+          // let go: it falls back into the water, splashes on impact and tumbles with the throw
+          tumble(t);
         }
       }
       pointers.delete(e.pointerId);
@@ -208,8 +214,6 @@ export function WaterApp() {
     let raf = 0;
     let last = performance.now();
     let acc = 0;
-    let lastPlane = { x: 0, y: 0 };
-    let slosh = 0;
     let lightGlow = 0;
     let lastLight = { x: 0, y: 0 };
     const start = last;
@@ -225,21 +229,7 @@ export function WaterApp() {
           sim.clear();
           rain.reset();
           activeMood = s.mood;
-          lastPlane = { x: 0, y: 0 };
         }
-        // Tilt the resting surface: the water sloshes toward the low side.
-        const PK = 0.035;
-        const px = tilt.value.x * PK;
-        const py = tilt.value.y * PK;
-        const ddx = Math.max(-0.004, Math.min(0.004, px - lastPlane.x));
-        const ddy = Math.max(-0.004, Math.min(0.004, py - lastPlane.y));
-        if (Math.abs(ddx) + Math.abs(ddy) > 1e-5) {
-          sim.shiftPlane(ddx, ddy);
-          slosh = Math.min(1, slosh + (Math.abs(ddx) + Math.abs(ddy)) * 160);
-          lastPlane = { x: lastPlane.x + ddx, y: lastPlane.y + ddy };
-        }
-
-        slosh *= Math.exp(-dt * 1.6);
         if (Math.abs(s.light.x - lastLight.x) + Math.abs(s.light.y - lastLight.y) > 1e-4) lightGlow = 1;
         else lightGlow *= Math.exp(-dt * 1.2);
         lastLight = s.light;
@@ -256,9 +246,14 @@ export function WaterApp() {
         }
         if (acc > 1) acc = 0;
 
-        drawUnder(underCtx, world.things, underScale, tilt.value, s.depth);
+        drawUnder(underCtx, world.things, underScale, s.depth, s.light);
         renderer.uploadObjects(world.things.length ? under : null);
-        drawSurface(topCtx, world.things, dpr, tilt.value);
+        // The phone's tilt only moves the eye: floor, walls, fish and toys are all seen from the same viewpoint.
+        const parallax = s.tiltOn ? tilt.value : { x: 0, y: 0 };
+        objects.draw(world.things, eyeFor(world.width, world.height, parallax, s.depth, s.mood), world.width, world.height, {
+          light: s.light,
+          water: hexToRgb(WATER_COLORS.deep),
+        });
 
         const liq = LIQUIDS[s.liquid] ?? { hex: "transparent" };
         renderer.draw({
@@ -274,9 +269,9 @@ export function WaterApp() {
           depth: s.depth,
           light: s.light,
           mood: s.mood === "sea" ? 1 : s.mood === "lake" ? 2 : 0,
-          slosh: s.tiltOn ? slosh : 0,
+          slosh: 0,
           lightGlow,
-          parallax: s.tiltOn ? tilt.value : { x: 0, y: 0 },
+          parallax,
         });
       }
       raf = requestAnimationFrame(frame);

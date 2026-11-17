@@ -3,3 +3,6 @@
 - [x] Suggest the next step after remixing: try it on a real phone, especially tilt and OS child lock.- [x] Compact pop-up settings, new defaults, pool/lake/seabed worlds, tilt edge foam, sun-orb light.
 - [x] Box-view tilt: pool walls, sea/lake relief parallax.
 - [x] 4 úszó hal (koi, kék trópusi, csíkos, cápa): menekülnek / odaúsznak, a cápa üldözi a húzott ujjat; minden tárgy 3× nagyobb
+- [x] A tilt csak a nézőpontot változtatja (mélység, padló, fal, tárgyak, halak): a fizikából kikerült a billentés-gyorsulás, a billegés és a hullámzás; az árnyék a fényt és a magasságot követi.
+- [x] Valódi 3D tárgyak és halak: saját WebGL2-renderer (`src/lib/water/gl/`), a padló doboz-nézetével azonos off-axis kamera; a hálók a feltöltött modellekből (`tools/models/`).
+- [x] Tárgyak testfizikája (`body.ts`): lebegés, ledobáskor loccsanás + billegés, dobásra átfordul és visszabillen, a labda gördül, húzás közben megemelkedik.
