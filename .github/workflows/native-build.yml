@@ -1,0 +1,216 @@
+name: Natív Android build – aláírt APK
+
+# A native/android (Kotlin + OpenGL ES + Compose) forrásból épít, és a Releases oldalra teszi az APK-t
+# (az alkalmazás innen frissíti magát). Csak Android; iOS még nincs.
+#
+# Indítás: Actions → "Natív Android build – aláírt APK" → Run workflow (vagy push a main-re a native/** módosításával).
+#
+# Az aláírókulcs EGYSZER készül, ugyanebben a workflow-ban:
+#   - ha az ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS titkok már megvannak,
+#     a "keystore" job csak ellenőrzi őket, és a build ezeket használja újra (minden kiadás ugyanazzal a kulccsal
+#     van aláírva, így a telepített app frissíthető);
+#   - ha még nincsenek, a "keystore" job létrehozza és beállítja őket, majd újraindítja a workflow-t.
+#
+# Egyszeri előkészítés (Settings → Secrets and variables → Actions → New repository secret):
+#   KEYSTORE_ADMIN_TOKEN        fine-grained token, csak erre a tárolóra, jogosultság: "Secrets: Read and write"
+#                               (a GITHUB_TOKEN nem írhat titkot, ezért kell; csak a kulcs létrehozásához használjuk)
+#   KEYSTORE_BACKUP_PASSPHRASE  (nem kötelező, de ajánlott) hosszú jelszó; ha megvan, a kulcsról jelszóval titkosított
+#                               mentés is készül artifactként (a titkokat a GitHub nem adja vissza, a mentés nélkül
+#                               a kulcs elvesztése esetén az app csak újratelepítéssel frissíthető)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "native/**"
+      - "src/assets/models/**"
+      - ".github/workflows/native-build.yml"
+
+permissions:
+  contents: read
+
+# Egyszerre csak egy futás: a kulcs létrehozása nem versenghet saját magával.
+concurrency:
+  group: native-build
+  cancel-in-progress: false
+
+jobs:
+  keystore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    outputs:
+      created: ${{ steps.make.outputs.created }}
+    env:
+      GH_TOKEN: ${{ secrets.KEYSTORE_ADMIN_TOKEN }}
+      BACKUP_PASS: ${{ secrets.KEYSTORE_BACKUP_PASSPHRASE }}
+      HAVE_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' }}
+      ALIAS: pocketripplelab
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Aláírókulcs ellenőrzése, hiányában egyszeri létrehozása
+        id: make
+        run: |
+          set -euo pipefail
+          if [ "$HAVE_KEY" = "true" ]; then
+            echo "Az aláírókulcs már megvan (titkok beállítva) – újrahasznosítom, nem készítek újat."
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Nincs aláírókulcs, és a KEYSTORE_ADMIN_TOKEN sem érhető el, így nem tudom létrehozni. Állíts be egy repository secretet KEYSTORE_ADMIN_TOKEN néven (fine-grained token, ehhez a tárolóhoz, 'Secrets: Read and write'), majd indítsd újra a workflow-t."
+            exit 1
+          fi
+          # Védelem versenyhelyzet ellen: ha a titok közben mégis létezik, semmit sem írok felül.
+          if gh secret list --repo "$GITHUB_REPOSITORY" | grep -q '^ANDROID_KEYSTORE_BASE64'; then
+            echo "::notice::Az ANDROID_KEYSTORE_BASE64 titok már létezik – nem írom felül."
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PASS=$(openssl rand -hex 24)
+          echo "::add-mask::$PASS"
+          keytool -genkeypair -storetype PKCS12 -keystore release.keystore -alias "$ALIAS" \
+            -storepass "$PASS" -keypass "$PASS" -keyalg RSA -keysize 4096 -validity 36525 \
+            -dname "CN=PocketRippleLab"
+          printf '%s' "$PASS" | gh secret set ANDROID_KEYSTORE_PASSWORD --repo "$GITHUB_REPOSITORY"
+          printf '%s' "$ALIAS" | gh secret set ANDROID_KEY_ALIAS --repo "$GITHUB_REPOSITORY"
+          base64 -w0 release.keystore | gh secret set ANDROID_KEYSTORE_BASE64 --repo "$GITHUB_REPOSITORY"
+          echo "Ujjlenyomat (SHA-256, nyilvános adat):"
+          keytool -list -keystore release.keystore -storepass "$PASS" -alias "$ALIAS" | tail -n 1
+          if [ "${#BACKUP_PASS}" -ge 12 ]; then
+            mkdir backup
+            cp release.keystore backup/
+            printf '%s' "$PASS" > backup/password.txt
+            tar -czf backup.tgz -C backup .
+            openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -pass env:BACKUP_PASS -in backup.tgz -out keystore-backup.enc
+            echo "backup=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Nincs (vagy 12 karakternél rövidebb) KEYSTORE_BACKUP_PASSPHRASE – a kulcsról nem készült mentés."
+          fi
+          rm -rf backup backup.tgz release.keystore
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Titkosított kulcsmentés
+        if: steps.make.outputs.backup == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: keystore-backup-encrypted
+          path: keystore-backup.enc
+          retention-days: 30
+          if-no-files-found: error
+
+      # Az új titkok csak az újonnan induló futásokban látszanak, ezért a build külön futásban megy.
+      - name: A build újraindítása az új kulccsal
+        if: steps.make.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Az aláírókulcs elkészült és a titkok beállítva. Új futást indítok, ami már aláírt APK-t épít."
+          gh workflow run native-build.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
+
+  stamp:
+    runs-on: ubuntu-latest
+    outputs:
+      stamp: ${{ steps.s.outputs.stamp }}
+      version: ${{ steps.s.outputs.version }}
+      code: ${{ steps.s.outputs.code }}
+    steps:
+      - id: s
+        run: |
+          echo "stamp=$(TZ=Europe/Budapest date +%Y-%m-%d_%H%M)" >> "$GITHUB_OUTPUT"
+          echo "version=$(TZ=Europe/Budapest date +%Y.%m.%d-%H%M)" >> "$GITHUB_OUTPUT"
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  android:
+    needs: [stamp, keystore]
+    # Ha ebben a futásban készült a kulcs, a build a (keystore job által indított) következő futásban megy.
+    if: ${{ needs.keystore.outputs.created != 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      APP_VERSION_NAME: ${{ needs.stamp.outputs.version }}
+      APP_VERSION_CODE: ${{ needs.stamp.outputs.code }}
+      BUILD_STAMP: ${{ needs.stamp.outputs.stamp }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Nincs gradlew a repóban, ezért a Gradle-t az action telepíti (AGP 8.9.2 ≥ Gradle 8.11.1).
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Aláírókulcs előkészítése
+        env:
+          KS_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KS_BASE64" ] || [ -z "$KS_PASSWORD" ]; then
+            echo "::error::Hiányzik az aláírókulcs (ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD). Indítsd újra a workflow-t: a keystore job létrehozza."
+            exit 1
+          fi
+          KS_FILE="$RUNNER_TEMP/pocketripplelab.keystore"
+          printf '%s' "$KS_BASE64" | base64 -d > "$KS_FILE"
+          chmod 600 "$KS_FILE"
+          echo "ANDROID_KEYSTORE_FILE=$KS_FILE" >> "$GITHUB_ENV"
+
+      # A logika (koppintás-kapu, hullámok, testfizika, kamera, halak) egységtesztjei; nem blokkolják a kiadást.
+      - name: Egységtesztek
+        continue-on-error: true
+        run: gradle -p native/android testDebugUnitTest --no-daemon
+
+      - name: Natív Android release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          gradle -p native/android assembleRelease --no-daemon
+          APK=$(find native/android/app/build/outputs/apk/release -name '*.apk' | head -n1)
+          test -n "$APK"
+          mkdir -p out
+          cp "$APK" "out/PocketRippleLab-${BUILD_STAMP}.apk"
+          APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name apksigner | sort -V | tail -n1)
+          "$APKSIGNER" verify --verbose "out/PocketRippleLab-${BUILD_STAMP}.apk"
+
+      - name: Kulcs törlése a futtatóról
+        if: always()
+        run: rm -f "$RUNNER_TEMP/pocketripplelab.keystore"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pocketripplelab-apk
+          path: out/*.apk
+          if-no-files-found: error
+
+  release:
+    if: ${{ needs.android.result == 'success' }}
+    needs: [stamp, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pocketripplelab-apk
+          path: out
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: native-${{ needs.stamp.outputs.stamp }}-${{ needs.stamp.outputs.code }}
+          name: Víztükör ${{ needs.stamp.outputs.version }}
+          prerelease: false
+          make_latest: true
+          body: |
+            Natív Android build · ${{ needs.stamp.outputs.version }} (#${{ needs.stamp.outputs.code }})
+            Aláírt Release APK. Az alkalmazás a Beállítások → Frissítés alatt innen tölti le az újabb verziót (azonos kulccsal aláírva, ezért felülírja a régit).
+          files: out/*.apk

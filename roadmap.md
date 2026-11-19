@@ -6,3 +6,4 @@
 - [x] A tilt csak a nézőpontot változtatja (mélység, padló, fal, tárgyak, halak): a fizikából kikerült a billentés-gyorsulás, a billegés és a hullámzás; az árnyék a fényt és a magasságot követi.
 - [x] Valódi 3D tárgyak és halak: saját WebGL2-renderer (`src/lib/water/gl/`), a padló doboz-nézetével azonos off-axis kamera; a hálók a feltöltött modellekből (`tools/models/`).
 - [x] Tárgyak testfizikája (`body.ts`): lebegés, ledobáskor loccsanás + billegés, dobásra átfordul és visszabillen, a labda gördül, húzás közben megemelkedik.
+- [x] Natív Android változat (`native/android`, Kotlin + OpenGL ES 3.0 + Compose): ugyanaz a szimuláció, shader és 3D modell; kiosk (képernyő-rögzítés), beállítások 5 koppintással a ⚙ ikonon, OTA frissítés a Releases-ből, egyszer létrehozott és újrahasznosított aláírókulcs egyetlen workflow-ban (`native-build.yml`).
