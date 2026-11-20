@@ -31,32 +31,17 @@ nem billenti őket, és a víz sem hullámzik tőle. A tárgyak testfizikája (l
 
 ## Aláírt APK és kiadás (GitHub Actions)
 
-`.github/workflows/native-build.yml` – egyetlen workflow, **Run workflow** gombbal indítható (vagy push a `main`-re a `native/**` módosításával).
-Az aláírókulcs **egyszer** készül ugyanebben a workflow-ban, és utána minden build újrahasznosítja (három titok: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`).
+A `.github/workflows/native-build.yml` a RepoPush rendszeréhez hasonlóan kezeli az Android aláírókulcsot.
 
-### Első alkalom – kézi út (nem kell hozzá token)
+- **Első futás:** ha még nincs `signing` ág, a workflow létrehoz egy RSA-4096 aláírókulcsot, titkosítja, majd a `signing` ágra menti a `release.keystore.enc` fájlt. A visszafejtéshez szükséges jelszó ugyanitt, a `keystore.pass` fájlban van.
+- **Automatikus folytatás:** az első futás elindít egy új workflow-futást. Ez visszaállítja a kulcsot, aláírja az APK-t, ellenőrzi az aláírást, majd GitHub Release-t készít.
+- **További build-ek:** mindig ugyanazt a `signing` ágon tárolt kulcsot használják, ezért az új APK a korábbi alkalmazásra frissítésként telepíthető.
 
-1. Vegyél fel egy **`KEYSTORE_BACKUP_PASSPHRASE`** titkot (Settings → Secrets and variables → Actions → New repository secret): hosszú jelszó, legalább 12 karakter.
-2. Indítsd a workflow-t. A `keystore` job legenerálja a kulcsot, és **ezzel a jelszóval titkosítva** (AES-256) kiadja a `signing-key-bundle-encrypted` artifactban (3 napig marad meg). A futás **Summary** oldala lépésről lépésre leírja, mit kell tenni.
-3. Töltsd le az artifactot, és a gépeden bontsd ki:
+A `signing` ág külön van a `main` ágtól, így a forráskód teljes cseréje nem törli a kulcsot. **Ne töröld a `signing` ágat, és ne módosítsd a benne lévő fájlokat.**
 
-   ```sh
-   openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in keystore-bundle.enc -out bundle.tgz
-   mkdir kulcs && tar -xzf bundle.tgz -C kulcs
-   ```
+Opcionálisan beállítható az `ANDROID_KEYSTORE_PASSWORD` repository secret is. Ha megadod, annak pontosan meg kell egyeznie a kulcs létrehozásakor használt jelszóval. A korábban `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD` és `ANDROID_KEY_ALIAS` secretben tárolt kulcsot az első futás átveszi a `signing` ágra, nem generál helyette újat. Alapértelmezésben nincs szükség kézzel felvett secretre vagy külön tokenre: a workflow a saját `GITHUB_TOKEN` jogosultságát használja.
 
-4. A `kulcs` mappa három szövegfájlját másold be három repository titokba: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`. A `release.keystore` fájlt őrizd meg biztonságos helyen (mentés).
-5. Indítsd újra a workflow-t: megtalálja a titkokat, **nem készít új kulcsot**, aláírja az APK-t, ellenőrzi (`apksigner verify`), és Release-t készít `native-<dátum>-<futásszám>` címkével.
-
-Csak annak a futásnak a csomagját használd, amelyik az utolsó volt: ha a titkok megadása előtt újra futtatod a workflow-t, új kulcs készül, és a régi csomag érvénytelen.
-
-### Automata út (opcionális)
-
-Ha van **`KEYSTORE_ADMIN_TOKEN`** titkod (fine-grained token ehhez a tárolóhoz, „Secrets: Read and write”), a workflow a három titkot maga állítja be, és magától újraindul; a token utána törölhető. Ha a `KEYSTORE_BACKUP_PASSPHRASE` is megvan, a titkosított mentés ilyenkor is elkészül.
-
-### Utána
-
-Minden további indítás ugyanazzal a kulccsal ír alá, így a telepített app felülírható és frissíthető. A kulcsot ne töröld és ne cseréld: másik kulccsal aláírt APK nem telepíthető a régi fölé (csak újratelepítéssel).
+Indítás: GitHub → **Actions** → **Natív Android build – aláírt APK** → **Run workflow**. Az első futás a kulcsot készíti elő és automatikusan elindítja a következőt; a második futás készíti el az aláírt APK-t és a Release-t.
 
 ## OTA frissítés
 
