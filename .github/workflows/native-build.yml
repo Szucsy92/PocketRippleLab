@@ -35,6 +35,11 @@ jobs:
       KS_BASE64_SECRET: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       KS_ALIAS_SECRET: ${{ secrets.ANDROID_KEY_ALIAS }}
     steps:
+      # A signing ág lekéréséhez a jobnak is Git working tree kell.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
