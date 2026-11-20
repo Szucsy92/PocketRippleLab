@@ -88,8 +88,26 @@ jobs:
               exit 1
             }
             git show FETCH_HEAD:release.keystore.enc > "$ENC_FILE"
-            openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
-              -pass env:KS_PASS -in "$ENC_FILE" -out "$KS_FILE"
+            # A RepoPush-alapú korábbi mentés 200000 iterációval készült,
+            # a PocketRippleLab új mentése 600000-rel. Mindkettőt támogatjuk.
+            DECRYPTED=false
+            for ITER in 200000 600000; do
+              rm -f "$KS_FILE"
+              if openssl enc -d -aes-256-cbc -pbkdf2 -iter "$ITER" \
+                -pass env:KS_PASS -in "$ENC_FILE" -out "$KS_FILE" 2>/dev/null; then
+                if keytool -list -keystore "$KS_FILE" -storepass "$KS_PASS" \
+                  -alias pocketripplelab >/dev/null 2>&1; then
+                  echo "A signing mentés visszafejtése sikerült (PBKDF2 iteráció: $ITER)."
+                  DECRYPTED=true
+                  break
+                fi
+              fi
+            done
+            if [ "$DECRYPTED" != "true" ]; then
+              rm -f "$KS_FILE"
+              echo "::error::A signing ágon lévő kulcs egyik támogatott PBKDF2-beállítással sem fejthető vissza. A signing ágat nem írom felül; a mentést külön kell megvizsgálni."
+              exit 1
+            fi
           else
             echo "Nincs signing ág; egyszeri RSA-4096 kulcsot hozok létre."
             KS_PASS="$(openssl rand -hex 32)"
