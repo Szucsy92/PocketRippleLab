@@ -32,21 +32,31 @@ nem billenti őket, és a víz sem hullámzik tőle. A tárgyak testfizikája (l
 ## Aláírt APK és kiadás (GitHub Actions)
 
 `.github/workflows/native-build.yml` – egyetlen workflow, **Run workflow** gombbal indítható (vagy push a `main`-re a `native/**` módosításával).
+Az aláírókulcs **egyszer** készül ugyanebben a workflow-ban, és utána minden build újrahasznosítja (három titok: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`).
 
-**Egyszeri előkészítés** (Settings → Secrets and variables → Actions → New repository secret):
+### Első alkalom – kézi út (nem kell hozzá token)
 
-| Titok | Mire |
-| --- | --- |
-| `KEYSTORE_ADMIN_TOKEN` | fine-grained token ehhez a tárolóhoz, „Secrets: Read and write” – csak a kulcs létrehozásához kell (a `GITHUB_TOKEN` nem írhat titkot) |
-| `KEYSTORE_BACKUP_PASSPHRASE` | nem kötelező, ajánlott: hosszú jelszó; ha megvan, a kulcsról jelszóval titkosított mentés készül artifactként |
+1. Vegyél fel egy **`KEYSTORE_BACKUP_PASSPHRASE`** titkot (Settings → Secrets and variables → Actions → New repository secret): hosszú jelszó, legalább 12 karakter.
+2. Indítsd a workflow-t. A `keystore` job legenerálja a kulcsot, és **ezzel a jelszóval titkosítva** (AES-256) kiadja a `signing-key-bundle-encrypted` artifactban (3 napig marad meg). A futás **Summary** oldala lépésről lépésre leírja, mit kell tenni.
+3. Töltsd le az artifactot, és a gépeden bontsd ki:
 
-**Mi történik:**
+   ```sh
+   openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in keystore-bundle.enc -out bundle.tgz
+   mkdir kulcs && tar -xzf bundle.tgz -C kulcs
+   ```
 
-1. Első indításkor a `keystore` job létrehozza az aláírókulcsot, beállítja a három titkot (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`), majd magától újraindítja a workflow-t.
-2. A következő futás már megtalálja a titkokat: **nem készít új kulcsot**, hanem újrahasznosítja, aláírja az APK-t, ellenőrzi (`apksigner verify`), és Release-t készít `native-<dátum>-<futásszám>` címkével.
-3. Minden további indítás ugyanazzal a kulccsal ír alá, így a telepített app felülírható és frissíthető.
+4. A `kulcs` mappa három szövegfájlját másold be három repository titokba: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`. A `release.keystore` fájlt őrizd meg biztonságos helyen (mentés).
+5. Indítsd újra a workflow-t: megtalálja a titkokat, **nem készít új kulcsot**, aláírja az APK-t, ellenőrzi (`apksigner verify`), és Release-t készít `native-<dátum>-<futásszám>` címkével.
 
-A kulcsot ne töröld és ne cseréld: a másik kulccsal aláírt APK nem telepíthető a régi fölé (csak újratelepítéssel).
+Csak annak a futásnak a csomagját használd, amelyik az utolsó volt: ha a titkok megadása előtt újra futtatod a workflow-t, új kulcs készül, és a régi csomag érvénytelen.
+
+### Automata út (opcionális)
+
+Ha van **`KEYSTORE_ADMIN_TOKEN`** titkod (fine-grained token ehhez a tárolóhoz, „Secrets: Read and write”), a workflow a három titkot maga állítja be, és magától újraindul; a token utána törölhető. Ha a `KEYSTORE_BACKUP_PASSPHRASE` is megvan, a titkosított mentés ilyenkor is elkészül.
+
+### Utána
+
+Minden további indítás ugyanazzal a kulccsal ír alá, így a telepített app felülírható és frissíthető. A kulcsot ne töröld és ne cseréld: másik kulccsal aláírt APK nem telepíthető a régi fölé (csak újratelepítéssel).
 
 ## OTA frissítés
 
