@@ -62,6 +62,8 @@ jobs:
               KS_PASS="$(git show FETCH_HEAD:keystore.pass)"
             fi
             echo "::add-mask::$KS_PASS"
+            # openssl -pass env:KS_PASS kizárólag exportált környezeti változót lát.
+            export KS_PASS
             openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:KS_PASS -in "$ENC" -out "$KS" \
               || { echo "::error::A signing ágon tárolt kulcs nem fejthető vissza."; exit 1; }
             echo "Meglévő aláírókulcs visszaállítva a signing ágról."
@@ -89,6 +91,8 @@ jobs:
               exit 1
             fi
             echo "::add-mask::$KS_PASS"
+            # A generálás és a titkosítás ugyanazt a jelszót használja.
+            export KS_PASS
             if [ ! -s "$KS" ]; then
               keytool -genkeypair -storetype PKCS12 -keystore "$KS" -alias "$ALIAS" \
                 -storepass "$KS_PASS" -keypass "$KS_PASS" -keyalg RSA -keysize 4096 -validity 36525 \
@@ -180,6 +184,7 @@ jobs:
             KS_PASS="$(git show FETCH_HEAD:keystore.pass)"
           fi
           echo "::add-mask::$KS_PASS"
+          export KS_PASS
           openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:KS_PASS -in "$ENC" -out "$KS_FILE"
           chmod 600 "$KS_FILE"
           echo "ANDROID_KEYSTORE_FILE=$KS_FILE" >> "$GITHUB_ENV"
