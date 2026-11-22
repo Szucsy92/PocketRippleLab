@@ -72,7 +72,12 @@ describe("Water rules", () => {
     expect(sim.cur[20 * 41 + 20 + 13]).toBe(0);
   });
 });
-import { PHYS, fishIntent, fishDecision, makeThing, updateThings, drawSurface, drawUnder, headingFrame, fishPose, FISH_SHEET, BALL, HEADING, SIZE_FACTOR, FISH, type Kind, type World } from "../lib/water/objects";
+import { PHYS, BODY, fishIntent, fishDecision, makeThing, updateThings, drawUnder, eyeFor, poseOf, tumble, SIZE_FACTOR, FISH, hEq, type Kind, type World } from "../lib/water/objects";
+import { project, qRot, qAxisAngle, qMul, viewProj } from "../lib/water/gl/mat";
+import { parsePack } from "../lib/water/gl/pack";
+import { toyEye } from "../lib/water/gl/camera";
+import { readFileSync } from "node:fs";
+import { inflateRawSync } from "node:zlib";
 describe("Toys", () => {
   it("offers 4 toys and 4 fish incl. a shark", () => expect(Object.keys(PHYS).sort()).toEqual(["ball", "boat", "duck", "koi", "perch", "ring", "shark", "tang"]));
   it("makes things 3x bigger", () => { expect(SIZE_FACTOR).toBe(3); expect(makeThing("ball", 0, 0, 1).r).toBeGreaterThan(20 * 3 * 0.9); });
@@ -91,7 +96,7 @@ describe("Toys", () => {
 });
 
 describe("Fish behaviour", () => {
-  const world = (): World => ({ things: [], width: 460, height: 800, cell: 2.3, tilt: { x: 0, y: 0 }, touches: [] });
+  const world = (): World => ({ things: [], width: 460, height: 800, cell: 2.3, touches: [] });
   const run = (w: World, sim: WaterSim, seconds: number, each: () => void) => {
     for (let i = 0; i < seconds * 30; i++) { updateThings(w, sim, 1 / 30); sim.step(); each(); }
   };
@@ -162,54 +167,185 @@ describe("Fish behaviour", () => {
   });
 });
 
-describe("Photoreal sprites", () => {
-  const world = (): World => ({ things: [], width: 460, height: 800, cell: 2.3, tilt: { x: 0, y: 0 }, touches: [] });
-  const fakeCtx = () => {
-    const calls: string[] = [];
-    const ctx = new Proxy({ canvas: { width: 460, height: 800 } } as Record<string, unknown>, {
-      get: (o, k: string) => (k in o ? o[k] : (...a: unknown[]) => { calls.push(k); return k.startsWith("create") ? { addColorStop: () => {} } : a[0]; }),
-      set: (o, k: string, v) => { o[k] = v; return true; },
-    });
-    return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
-  };
-  it("draws every kind without errors, also before the sprites have loaded", () => {
-    const w = world(), sim = new WaterSim(200, 360);
+describe("3D toys", () => {
+  const world = (): World => ({ things: [], width: 460, height: 800, cell: 2.3, touches: [] });
+  const run = (w: World, sim: WaterSim, seconds: number) => { for (let i = 0; i < seconds * 60; i++) { updateThings(w, sim, 1 / 60); sim.step(); } };
+  const upZ = (q: Parameters<typeof qRot>[0]) => qRot(q, [0, 0, 1])[2];
+  const quiet = () => { const sim = new WaterSim(200, 360); sim.damping = 0.97; return sim; };
+
+  it("a new toy is dropped in: it falls, splashes and settles upright at its waterline", () => {
+    const w = world(), sim = quiet();
+    const d = makeThing("duck", 230, 400, 1);
+    w.things.push(d);
+    expect(d.h).toBeGreaterThan(hEq(d) + d.r);
+    let minH = d.h, wasAir = d.air, ripple = 0;
+    for (let i = 0; i < 60 * 6; i++) { updateThings(w, sim, 1 / 60); sim.step(); minH = Math.min(minH, d.h); ripple = Math.max(ripple, ...Array.from(sim.cur).map(Math.abs)); }
+    expect(wasAir).toBe(true);
+    expect(minH).toBeLessThan(hEq(d) + 1);
+    expect(Math.abs(d.h - hEq(d))).toBeLessThan(d.r * 0.3);
+    expect(upZ(d.q)).toBeGreaterThan(0.9);
+    expect(ripple).toBeGreaterThan(0.5); // the impact rippled the water
+  });
+  it("a toy that lands upside down flips back over by itself (not the ball: it has no up)", () => {
+    for (const kind of ["duck", "boat", "ring"] as const) {
+      const w = world(), sim = quiet();
+      const t = makeThing(kind, 230, 400, 1);
+      t.h = hEq(t); t.air = false; t.hv = 0;
+      t.q = qMul(qAxisAngle(1, 0, 0, Math.PI * 0.97), t.q); // belly up
+      t.w = [0.3, 0.2, 0];
+      w.things.push(t);
+      expect(upZ(t.q)).toBeLessThan(-0.9);
+      run(w, sim, 4);
+      expect(upZ(t.q)).toBeGreaterThan(0.85);
+    }
+  });
+  it("a thrown toy wobbles: it tilts after the drop, then calms down", () => {
+    const w = world(), sim = quiet();
+    const b = makeThing("boat", 230, 400, 1);
+    b.h = hEq(b); b.air = false; b.vx = 500; b.vy = -300;
+    tumble(b);
+    w.things.push(b);
+    let worst = 1;
+    for (let i = 0; i < 60 * 5; i++) { updateThings(w, sim, 1 / 60); sim.step(); if (i < 90) worst = Math.min(worst, upZ(b.q)); }
+    expect(worst).toBeLessThan(0.98);
+    expect(upZ(b.q)).toBeGreaterThan(0.9);
+  });
+  it("a held toy is lifted out of the water and falls back when let go", () => {
+    const w = world(), sim = quiet();
+    const d = makeThing("duck", 230, 400, 1);
+    d.h = hEq(d); d.air = false; d.grabbed = 1;
+    w.things.push(d);
+    run(w, sim, 0.6);
+    expect(d.h).toBeGreaterThan(hEq(d) + d.r * 0.5);
+    d.grabbed = null;
+    run(w, sim, 3);
+    expect(Math.abs(d.h - hEq(d))).toBeLessThan(d.r * 0.3);
+  });
+  it("tilting the phone never moves or tilts a toy (the camera is the only thing that changes)", () => {
+    // updateThings takes no tilt at all; the world has no tilt field and a still toy stays where it is
+    const w = world(), sim = quiet();
+    const t = makeThing("ball", 380, 700, 1);
+    t.h = hEq(t); t.air = false;
+    w.things.push(t);
+    const x = t.x, y = t.y;
+    run(w, sim, 3);
+    expect(Math.hypot(t.x - x, t.y - y)).toBeLessThan(3);
+    expect("tilt" in w).toBe(false);
+  });
+  it("keeps every toy inside the pool when thrown at the wall", () => {
+    const w = world(), sim = quiet();
+    const t = makeThing("ring", 230, 400, 1);
+    t.vx = 1200; t.vy = 900; w.things.push(t);
+    run(w, sim, 4);
+    expect(t.x).toBeGreaterThanOrEqual(t.r - 1); expect(t.x).toBeLessThanOrEqual(w.width - t.r + 1);
+    expect(t.y).toBeGreaterThanOrEqual(t.r - 1); expect(t.y).toBeLessThanOrEqual(w.height - t.r + 1);
+  });
+  it("a rolling ball spins along its drift", () => {
+    const w = world(), sim = quiet();
+    const b = makeThing("ball", 230, 400, 1);
+    b.h = hEq(b); b.air = false; b.vx = 300; b.vy = 0; w.things.push(b);
+    for (let i = 0; i < 20; i++) updateThings(w, sim, 1 / 60);
+    expect(Math.abs(b.w[1])).toBeGreaterThan(0.5); // spin about the horizontal axis across the motion
+  });
+  it("draws shadows for everything without errors", () => {
+    const w = world();
     for (const k of ["duck", "boat", "ball", "ring", ...FISH] as Kind[]) w.things.push(makeThing(k, 200, 300, 1));
-    updateThings(w, sim, 1 / 60);
-    const { ctx } = fakeCtx();
-    expect(() => { drawUnder(ctx, w.things, 1); drawSurface(ctx, w.things, 2, { x: 0.2, y: -0.1 }); }).not.toThrow();
+    const ctx = new Proxy({ canvas: { width: 460, height: 800 } } as Record<string, unknown>, {
+      get: (o, k: string) => (k in o ? o[k] : (...a: unknown[]) => (k.startsWith("create") ? { addColorStop: () => {} } : a[0])),
+      set: (o, k: string, v) => { o[k] = v; return true; },
+    }) as unknown as CanvasRenderingContext2D;
+    expect(() => drawUnder(ctx, w.things, 1, 0.5, { x: -0.7, y: 0.7 })).not.toThrow();
   });
-  it("picks the nearest pre-rendered heading", () => {
-    expect(headingFrame(0, 16)).toEqual({ idx: 0, rest: 0 });
-    expect(headingFrame(Math.PI, 16).idx).toBe(8);
-    expect(headingFrame(-0.1, 16).idx).toBe(0);
-    expect(headingFrame(Math.PI * 2 - 0.05, 16).idx).toBe(0);
-    const h = headingFrame(0.3, 16);
-    expect(Math.abs(h.rest)).toBeLessThan(Math.PI / 16 + 1e-9);
+});
+
+describe("Camera", () => {
+  const W = 390, H = 844;
+  it("has no tilt: the eye sits over the middle and objects at the surface never move", () => {
+    const e = eyeFor(W, H, { x: 0, y: 0 }, 0.5, null);
+    expect(e.x).toBeCloseTo(W / 2); expect(e.y).toBeCloseTo(H / 2);
+    const t = eyeFor(W, H, { x: 0.7, y: -0.4 }, 0.5, null);
+    const p = project(W, H, t.x, t.y, t.h, [120, -300, 0]);
+    expect(p.x).toBeCloseTo(120); expect(p.y).toBeCloseTo(300);
   });
-  it("describes fish poses: bank by turn, mirror by side, still tail when hovering", () => {
-    const base = { turn: 0, speed: 60, tail: 0, side: -1 };
-    expect(fishPose(base, 8).bendRow).toBe(0);
-    expect(fishPose({ ...base, turn: 1 }, 8).bendRow).toBe(1);
-    expect(fishPose({ ...base, turn: -5 }, 8).bendRow).toBe(2);
-    expect(fishPose({ ...base, side: 1 }, 8).mirror).toBe(true);
-    expect(fishPose({ ...base, side: 1 }, 8).colA).toBe(4); // mirrored pose = opposite tail phase
-    expect(fishPose({ ...base, speed: 0 }, 8).amp).toBeLessThan(0.3);
-    expect(fishPose({ ...base, speed: 0, turn: 3 }, 8).amp).toBe(1); // no ghosting while turning
-    expect(fishPose({ ...base, tail: Math.PI }, 8).colA).toBe(4);
+  it("tilt only moves the eye: the same point is seen from another angle", () => {
+    const a = project(W, H, ...(([e]) => [e.x, e.y, e.h] as const)([eyeFor(W, H, { x: 0, y: 0 }, 0.5, null)]), [120, -300, 80]);
+    const t = eyeFor(W, H, { x: 0.5, y: 0.3 }, 0.5, null);
+    const b = project(W, H, t.x, t.y, t.h, [120, -300, 80]);
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(5);
   });
-  it("describes sprite sheets consistently", () => {
-    for (const k of FISH) { expect(FISH_SHEET[k].cols * FISH_SHEET[k].cw).toBeLessThanOrEqual(4096); expect(FISH_SHEET[k].lenPx).toBeLessThan(FISH_SHEET[k].cw); }
-    expect(BALL.urls).toHaveLength(2);
-    expect(HEADING.duck.frames).toBe(HEADING.duck.cols * 2);
-    expect(HEADING.boat.frames).toBe(HEADING.boat.cols * 2);
+  it("matches the floor shader: a floor point lands where the shader's parallax puts it", () => {
+    for (const [depth, mood, par] of [[0.35, null, { x: 0.4, y: -0.2 }], [1, "sea", { x: -0.6, y: 0.5 }], [0.7, "lake", { x: 0.1, y: 0.3 }]] as const) {
+      const e = eyeFor(W, H, par, depth, mood);
+      const boxD = 0.25 + depth * 0.75, relief = mood ? 0.6 : 1;
+      const cl = (v: number) => Math.max(-0.6, Math.min(0.6, v));
+      const sPhys = { x: cl(par.x * boxD * 0.7 * relief), y: cl(par.y * boxD * 0.7 * relief) }, persp = boxD * 0.45 * relief;
+      for (const [px, py] of [[50, 100], [300, 700], [195, 422]] as const) {
+        // shader: the pixel (px, py) shows the floor at px + sh
+        const sh = { x: sPhys.x * H + (px - W / 2) * persp, y: sPhys.y * H + (py - H / 2) * persp };
+        const floorPoint = project(W, H, e.x, e.y, e.h, [px + sh.x, -(py + sh.y), -e.floor]);
+        // the floor point q appears at q - sh(q): check the inverse relation for the point that is displayed at (px, py)
+        const q = { x: px + sh.x, y: py + sh.y };
+        const shq = { x: sPhys.x * H + (q.x - W / 2) * persp, y: sPhys.y * H + (q.y - H / 2) * persp };
+        expect(floorPoint.x).toBeCloseTo(q.x - shq.x, 3);
+        expect(floorPoint.y).toBeCloseTo(q.y - shq.y, 3);
+      }
+    }
   });
-  it("a ball rolls in its direction of travel", () => {
-    const w = world(), sim = new WaterSim(200, 360);
-    const b = makeThing("ball", 200, 300, 1);
-    b.vx = 0; b.vy = 300; w.things.push(b);
-    for (let i = 0; i < 10; i++) updateThings(w, sim, 1 / 30);
-    expect(Math.cos(b.angle - Math.atan2(b.vy, b.vx))).toBeGreaterThan(0.9);
-    expect(b.spin).toBeGreaterThan(0.5);
+  it("the off-axis projection maps the screen rectangle on the surface to clip space", () => {
+    const e = eyeFor(W, H, { x: 0.3, y: 0.2 }, 0.6, null);
+    const m = viewProj(new Float32Array(16), W, H, e.x, e.y, e.h);
+    const clip = (x: number, y: number, z: number) => {
+      const wx = x, wy = -y;
+      const c = [0, 1, 2, 3].map((r) => m[r]! * wx + m[4 + r]! * wy + m[8 + r]! * z + m[12 + r]!);
+      return [c[0]! / c[3]!, c[1]! / c[3]!];
+    };
+    const [x0, y0] = clip(0, 0, 0), [x1, y1] = clip(W, H, 0);
+    expect(x0).toBeCloseTo(-1); expect(y0).toBeCloseTo(1); expect(x1).toBeCloseTo(1); expect(y1).toBeCloseTo(-1);
+  });
+  it("toys use a gentler eye than the floor, fish the full one", () => {
+    const e = eyeFor(W, H, { x: 0.8, y: 0 }, 0.5, null), t = toyEye(W, H, e);
+    expect(Math.abs(t.x - W / 2)).toBeLessThan(Math.abs(e.x - W / 2));
+    expect(t.h).toBe(e.h);
+  });
+  it("fish hang below the surface and shift with the eye (parallax)", () => {
+    const f = makeThing("koi", 195, 422, 1);
+    f.z = 0.6;
+    const e0 = eyeFor(W, H, { x: 0, y: 0 }, 0.5, null), e1 = eyeFor(W, H, { x: 0.6, y: 0 }, 0.5, null);
+    const p0 = poseOf(f, e0).pos, p1 = poseOf(f, e1).pos;
+    expect(p0[2]).toBeLessThan(-50);
+    const a = project(W, H, e0.x, e0.y, e0.h, p0), b = project(W, H, e1.x, e1.y, e1.h, p1);
+    expect(Math.abs(a.x - b.x)).toBeGreaterThan(10);
+  });
+});
+
+describe("Mesh packs", () => {
+  const dir = new URL("../assets/models/", import.meta.url);
+  const load = (name: string) => {
+    let buf = readFileSync(new URL(name, dir));
+    if (buf.subarray(0, 4).toString() === "PRMZ") buf = inflateRawSync(buf.subarray(8));
+    return parsePack(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+  };
+  it("have the waterline the physics expects", () => {
+    expect(load("ball.prm").waterline).toBeCloseTo(BODY.ball.waterline, 2);
+    expect(load("ring.prm").waterline).toBeCloseTo(BODY.ring.waterline, 2);
+    expect(load("duck.prm").waterline).toBeCloseTo(BODY.duck.waterline, 2);
+    expect(load("boat.prm").waterline).toBeCloseTo(BODY.boat.waterline, 1);
+  });
+  it("are about one radius big and drawn from valid indices", () => {
+    for (const n of ["ball", "ring", "duck", "boat"]) {
+      const p = load(`${n}.prm`);
+      const maxR = Math.max(...[0, 1, 2].map((a) => Math.max(Math.abs(p.lo[a]!), Math.abs(p.lo[a]! + p.span[a]!))));
+      expect(maxR).toBeGreaterThan(0.6); expect(maxR).toBeLessThan(2.6);
+      let top = 0; for (const i of p.idx) top = Math.max(top, i);
+      expect(top).toBeLessThan(p.verts);
+      expect(p.parts.reduce((a, q) => a + q.count, 0)).toBe(p.idx.length);
+    }
+  });
+  it("hold animated fish: swim loop for all, a bite for the shark", () => {
+    const c = load("clown.prm"), s = load("shark.prm");
+    expect(c.frames).toBe(24); expect(c.clips["swim"]?.loop).toBe(true);
+    expect(s.clips["swim"]?.count).toBe(12); expect(s.clips["bite"]?.count).toBe(20);
+    expect(s.frames).toBe(32);
+    for (const p of [c, s]) expect(p.span[0]).toBeGreaterThan(0.8); // about one length long
   });
 });
