@@ -30,11 +30,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-# Native Android
-native/android/.gradle/
-native/android/build/
-native/android/app/build/
-native/android/local.properties
-*.keystore
-*.jks

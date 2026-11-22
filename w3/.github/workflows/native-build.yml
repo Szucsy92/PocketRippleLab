@@ -1,0 +1,196 @@
+name: Natív Android build – aláírt APK
+
+# A native/android (Kotlin + OpenGL ES + Compose) forrásból épít, és a Releases oldalra teszi az APK-t
+# (az alkalmazás innen frissíti magát). Csak Android; iOS még nincs.
+#
+# Indítás: Actions → "Natív Android build – aláírt APK" → Run workflow (vagy push a main-re a native/** módosításával).
+#
+# Az aláírókulcs egyszer készül el. A RepoPush mintájára a workflow a külön `signing`
+# ágon tárolja a titkosított PKCS12 kulcsot és az automatikus visszafejtéshez szükséges
+# jelszót; a későbbi build-ek ugyanazt a kulcsot használják.
+#
+# Első futás: RSA-4096 kulcs generálása + AES-256-CBC/PBKDF2 titkosított mentés a `signing` ágra.
+# Következő futások: a `signing` ágról visszatöltés és visszafejtés, kézi Secret-beállítás nélkül.
+#
+# FONTOS: a RepoPush-kompatibilis automatikus módszer a jelszót is a `signing` ágon tárolja.
+# Ez megőrzi az automatizmust, de a privát kulcs védelme a GitHub-repository hozzáférési
+# jogosultságain és a GitHub titkosított tárolásán múlik. A `signing` ágat ne tedd publikussá.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "native/**"
+      - "src/assets/models/**"
+      - ".github/workflows/native-build.yml"
+
+permissions:
+  contents: read
+
+# Egyszerre csak egy futás: a kulcs létrehozása nem versenghet saját magával.
+concurrency:
+  group: native-build
+  cancel-in-progress: false
+
+jobs:
+  stamp:
+    runs-on: ubuntu-latest
+    outputs:
+      stamp: ${{ steps.s.outputs.stamp }}
+      version: ${{ steps.s.outputs.version }}
+      code: ${{ steps.s.outputs.code }}
+    steps:
+      - id: s
+        run: |
+          echo "stamp=$(TZ=Europe/Budapest date +%Y-%m-%d_%H%M)" >> "$GITHUB_OUTPUT"
+          echo "version=$(TZ=Europe/Budapest date +%Y.%m.%d-%H%M)" >> "$GITHUB_OUTPUT"
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  android:
+    needs: [stamp]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      APP_VERSION_NAME: ${{ needs.stamp.outputs.version }}
+      APP_VERSION_CODE: ${{ needs.stamp.outputs.code }}
+      BUILD_STAMP: ${{ needs.stamp.outputs.stamp }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Nincs gradlew a repóban, ezért a Gradle-t az action telepíti (AGP 8.9.2 ≥ Gradle 8.11.1).
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Aláírókulcs létrehozása vagy visszatöltése a signing ágról
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          KS_FILE="$RUNNER_TEMP/pocketripplelab.keystore"
+          ENC_FILE="$RUNNER_TEMP/pocketripplelab.keystore.enc"
+          KS_PASS=""
+
+          if git ls-remote --exit-code --heads origin signing >/dev/null 2>&1; then
+            echo "Meglévő signing ág megtalálva; a korábbi kulcsot töltöm vissza."
+            git fetch --depth=1 origin signing
+            git show FETCH_HEAD:keystore.pass > "$RUNNER_TEMP/keystore.pass"
+            KS_PASS="$(cat "$RUNNER_TEMP/keystore.pass")"
+            export KS_PASS
+            test "${#KS_PASS}" -ge 12 || {
+              echo "::error::A signing ágon tárolt kulcsjelszó hiányzik vagy hibás."
+              exit 1
+            }
+            git show FETCH_HEAD:release.keystore.enc > "$ENC_FILE"
+            # A RepoPush-alapú korábbi mentés 200000 iterációval készült,
+            # a PocketRippleLab új mentése 600000-rel. Mindkettőt támogatjuk.
+            DECRYPTED=false
+            for ITER in 200000 600000; do
+              rm -f "$KS_FILE"
+              if openssl enc -d -aes-256-cbc -pbkdf2 -iter "$ITER" \
+                -pass env:KS_PASS -in "$ENC_FILE" -out "$KS_FILE" 2>/dev/null; then
+                if keytool -list -keystore "$KS_FILE" -storepass "$KS_PASS" \
+                  -alias pocketripplelab >/dev/null 2>&1; then
+                  echo "A signing mentés visszafejtése sikerült (PBKDF2 iteráció: $ITER)."
+                  DECRYPTED=true
+                  break
+                fi
+              fi
+            done
+            if [ "$DECRYPTED" != "true" ]; then
+              rm -f "$KS_FILE"
+              echo "::error::A signing ágon lévő kulcs egyik támogatott PBKDF2-beállítással sem fejthető vissza. A signing ágat nem írom felül; a mentést külön kell megvizsgálni."
+              exit 1
+            fi
+          else
+            echo "Nincs signing ág; egyszeri RSA-4096 kulcsot hozok létre."
+            KS_PASS="$(openssl rand -hex 32)"
+            export KS_PASS
+            echo "::add-mask::$KS_PASS"
+            keytool -genkeypair -storetype PKCS12 -keystore "$KS_FILE" \
+              -alias pocketripplelab -storepass "$KS_PASS" -keypass "$KS_PASS" \
+              -keyalg RSA -keysize 4096 -validity 36525 \
+              -dname "CN=PocketRippleLab, O=Szucsy92, C=HU"
+
+            openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt \
+              -pass env:KS_PASS -in "$KS_FILE" -out "$ENC_FILE"
+
+            SIGN_DIR="$(mktemp -d)"
+            cp "$ENC_FILE" "$SIGN_DIR/release.keystore.enc"
+            printf '%s' "$KS_PASS" > "$SIGN_DIR/keystore.pass"
+            (
+              cd "$SIGN_DIR"
+              git init -q -b signing
+              git config user.name "github-actions"
+              git config user.email "github-actions@users.noreply.github.com"
+              git add release.keystore.enc keystore.pass
+              git commit -q -m "Create PocketRippleLab Android signing key"
+              git push -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" signing
+            )
+            rm -rf "$SIGN_DIR"
+            echo "::notice::Az új aláírókulcs elkészült és a signing ágra került."
+          fi
+
+          chmod 600 "$KS_FILE"
+          echo "::add-mask::$KS_PASS"
+          {
+            echo "ANDROID_KEYSTORE_FILE=$KS_FILE"
+            echo "ANDROID_KEYSTORE_PASSWORD=$KS_PASS"
+            echo "ANDROID_KEY_ALIAS=pocketripplelab"
+          } >> "$GITHUB_ENV"
+          keytool -list -keystore "$KS_FILE" -storepass "$KS_PASS" -alias pocketripplelab >/dev/null
+          echo "A PocketRippleLab aláírókulcs készen áll."
+
+      # A logika (koppintás-kapu, hullámok, testfizika, kamera, halak) egységtesztjei; nem blokkolják a kiadást.
+      - name: Egységtesztek
+        continue-on-error: true
+        run: gradle -p native/android testDebugUnitTest --no-daemon
+
+      - name: Natív Android release APK
+        run: |
+          set -euo pipefail
+          gradle -p native/android assembleRelease --no-daemon
+          APK=$(find native/android/app/build/outputs/apk/release -name '*.apk' | head -n1)
+          test -n "$APK"
+          mkdir -p out
+          cp "$APK" "out/PocketRippleLab-${BUILD_STAMP}.apk"
+          APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name apksigner | sort -V | tail -n1)
+          "$APKSIGNER" verify --verbose "out/PocketRippleLab-${BUILD_STAMP}.apk"
+
+      - name: Kulcs és ideiglenes jelszó törlése a futtatóról
+        if: always()
+        run: rm -f "$RUNNER_TEMP/pocketripplelab.keystore" "$RUNNER_TEMP/keystore.pass"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pocketripplelab-apk
+          path: out/*.apk
+          if-no-files-found: error
+
+  release:
+    if: ${{ needs.android.result == 'success' }}
+    needs: [stamp, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pocketripplelab-apk
+          path: out
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: native-${{ needs.stamp.outputs.stamp }}-${{ needs.stamp.outputs.code }}
+          name: PocketRippleLab ${{ needs.stamp.outputs.version }}
+          prerelease: false
+          make_latest: true
+          body: |
+            Natív Android build · ${{ needs.stamp.outputs.version }} (#${{ needs.stamp.outputs.code }})
+            Aláírt Release APK. Az alkalmazás a Beállítások → Frissítés alatt innen tölti le az újabb verziót (azonos kulccsal aláírva, ezért felülírja a régit).
+          files: out/*.apk
