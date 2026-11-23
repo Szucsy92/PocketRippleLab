@@ -13,12 +13,12 @@ import kotlin.math.sign
 import kotlin.math.sin
 import kotlin.random.Random
 
-/** Fish personalities: cruise / flee speeds. Only the shark hunts a moving finger. */
+/** Fish personalities: cruise / flee speeds. */
 class FishSpeed(val cruise: Float, val flee: Float)
 
-fun fishSpeed(k: Kind): FishSpeed = if (k == Kind.SHARK) FishSpeed(70f, 0f) else FishSpeed(55f, 480f)
+fun fishSpeed(k: Kind): FishSpeed = if (k == Kind.ALIEN) FishSpeed(48f, 420f) else FishSpeed(55f, 480f)
 
-enum class Mode { FLEE, COME, HUNT, CIRCLE, CRUISE }
+enum class Mode { FLEE, COME, CRUISE }
 
 class Intent(val vx: Float, val vy: Float, val mode: Mode)
 
@@ -30,18 +30,6 @@ fun fishIntent(kind: Kind, fx: Float, fy: Float, touches: List<Touch>, fear: Flo
     for (t in touches) {
         val d = hypot(t.x - fx, t.y - fy)
         if (d < nd) { nd = d; near = t }
-    }
-    if (kind == Kind.SHARK) {
-        if (near != null && near.speed > 60f) {
-            val k = 520f / max(1f, nd)
-            return Intent((near.x - fx) * k, (near.y - fy) * k, Mode.HUNT)
-        }
-        if (near != null) {
-            val ang = atan2(fy - near.y, fx - near.x) + 0.9f
-            val r = 140f
-            return Intent((near.x + cos(ang) * r - fx) * 1.5f, (near.y + sin(ang) * r - fy) * 1.5f, Mode.CIRCLE)
-        }
-        return Intent(0f, 0f, Mode.CRUISE)
     }
     if (near != null && near.speed > 60f && nd < 420f) {
         val k = sp.flee / max(1f, nd)
@@ -59,7 +47,7 @@ fun fishIntent(kind: Kind, fx: Float, fy: Float, touches: List<Touch>, fear: Flo
 class Trait(val turn: Float, val school: Float, val surface: Float, val rest: Float, val curious: Float, val zMin: Float, val zMax: Float)
 
 fun fishTrait(k: Kind): Trait =
-    if (k == Kind.SHARK) Trait(1.5f, 0f, 0.07f, 0.05f, 0.35f, 0.55f, 0.95f)
+    if (k == Kind.ALIEN) Trait(1.9f, 0.3f, 0.12f, 0.18f, 0.3f, 0.4f, 0.9f)
     else Trait(2.4f, 0.8f, 0.22f, 0.14f, 0.25f, 0.35f, 0.85f)
 
 enum class Action { SURFACE, REST, INSPECT, SWIM }
@@ -68,7 +56,7 @@ class Decision(val action: Action, val z: Float)
 
 /**
  * Pure: what does an idle fish do next? Rolls r1 / r2 are in 0..1.
- * SURFACE = come up for a gulp, REST = hover, INSPECT = follow a toy (or, for the shark, stalk a fish).
+ * SURFACE = come up for a gulp, REST = hover, INSPECT = follow a toy.
  */
 fun fishDecision(kind: Kind, r1: Float, r2: Float, hasTarget: Boolean): Decision {
     val tr = fishTrait(kind)
@@ -113,7 +101,7 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
     val fx = flowV[0]
     val fy = flowV[1]
     // Rough water scares the gentle fish; deep fish feel the surface less.
-    if (kind != Kind.SHARK) t.fear = min(1f, t.fear + max(0f, h * (1f - 0.5f * t.z) - 0.8f) * dt * 3f)
+    t.fear = min(1f, t.fear + max(0f, h * (1f - 0.5f * t.z) - 0.8f) * dt * 3f)
     t.fear *= exp(-dt * 0.8f)
     t.mind -= dt
     t.restT = max(0f, t.restT - dt)
@@ -126,29 +114,10 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
     var nearFinger = Float.POSITIVE_INFINITY
     for (p in touches) nearFinger = min(nearFinger, hypot(p.x - t.x, p.y - t.y))
 
-    // Gentle fish read the shark: a slow, distant shark is ignored, a fast or close one makes them bolt.
-    if (kind != Kind.SHARK) {
-        for (o in things) {
-            if (o.kind != Kind.SHARK || abs(o.z - t.z) > 0.55f) continue
-            val d = hypot(t.x - o.x, t.y - o.y)
-            if (d < 150f + o.r * 0.8f + hypot(o.vx, o.vy) * 0.6f) {
-                val k = (spd.flee * 0.9f) / max(1f, d)
-                dvx = (t.x - o.x) * k
-                dvy = (t.y - o.y) * k
-                mode = Mode.FLEE
-                t.boost = max(t.boost, 0.5f)
-            }
-        }
-    }
-
-    // Idle brain: now and then surface for a gulp, hover, follow a toy (shark: stalk a fish) or pick a new depth.
+    // Idle brain: now and then surface for a gulp, hover, follow a toy or pick a new depth.
     if (t.mind <= 0f && mode == Mode.CRUISE) {
         t.mind = 2f + Random.nextFloat() * 4f
-        val target = if (kind == Kind.SHARK) {
-            nearest(t, things, 700f) { o -> o.kind.isFish && o.kind != Kind.SHARK }
-        } else {
-            nearest(t, things, 600f) { o -> !o.kind.isFish }
-        }
+        val target = nearest(t, things, 600f) { o -> !o.kind.isFish }
         val d = fishDecision(kind, Random.nextFloat(), Random.nextFloat(), target != null)
         t.focus = null
         t.zGoal = d.z
@@ -162,38 +131,11 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
         }
     }
 
-    var lunging = false
     if (mode == Mode.CRUISE) {
         val fid = t.focus
         val tgt: Thing? = if (fid == null) null else things.firstOrNull { it.id == fid }
         if (fid != null && tgt == null) t.focus = null
-        if (kind == Kind.SHARK && tgt != null) {
-            // Stalk slowly, then lunge when close. It scares the fish, it never hurts them.
-            val dx = tgt.x - t.x
-            val dy = tgt.y - t.y
-            val d = hypot(dx, dy)
-            if (d > 900f) {
-                t.focus = null
-            } else {
-                lunging = d < 300f
-                val v = if (lunging) 430f else 85f
-                dvx = dx / max(1f, d) * v
-                dvy = dy / max(1f, d) * v
-                t.zGoal = if (lunging) tgt.z else 0.55f
-                if (d < t.r * 1.2f && abs(tgt.z - t.z) < 0.4f && t.bite <= 0f) {
-                    t.bite = 1f
-                    sim.disturb((t.x + cos(t.angle) * t.r) / cell, (t.y + sin(t.angle) * t.r) / cell, (t.r / cell) * 0.9f, -2.5f)
-                    t.speed *= 0.3f
-                    tgt.fear = 1f
-                    tgt.boost = 1.2f
-                    tgt.zGoal = 0.9f
-                    tgt.surfT = 0f
-                    tgt.focus = null
-                    t.focus = null
-                    t.mind = 6f + Random.nextFloat() * 5f
-                }
-            }
-        } else if (tgt != null) {
+        if (tgt != null) {
             // Curious: circle slowly around a toy floating above.
             val ang = atan2(t.y - tgt.y, t.x - tgt.x) + 0.9f
             val rr = tgt.r * 0.9f
@@ -214,7 +156,7 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
             var ay = 0f
             var n = 0
             for (o in things) {
-                if (o === t || !o.kind.isFish || o.kind == Kind.SHARK || abs(o.z - t.z) > 0.45f) continue
+                if (o === t || !o.kind.isFish || abs(o.z - t.z) > 0.45f) continue
                 val d = hypot(o.x - t.x, o.y - t.y)
                 if (d > 320f || d == 0f) continue
                 if (o.kind == kind) { cx += o.x; cy += o.y; ax += o.vx; ay += o.vy; n++ }
@@ -238,11 +180,9 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
         t.wander = t.angle
     }
 
-    // Depth goals: bolt to the deep when scared, rise to a still finger, shark shows its fin when hunting a finger.
+    // Depth goals: bolt to the deep when scared, rise to a still finger.
     if (mode == Mode.FLEE) { t.surfT = 0f; t.focus = null; t.zGoal = max(t.zGoal, 0.85f) }
     else if (mode == Mode.COME && nearFinger < 260f) { t.zGoal = 0.06f; t.mind = min(t.mind, 1.5f) }
-    else if (mode == Mode.HUNT) { t.surfT = 0f; t.zGoal = 0.1f; t.mind = min(t.mind, 2f) }
-    else if (mode == Mode.CIRCLE) t.zGoal = 0.35f
     else if (t.surfT > 0f) t.zGoal = 0.03f
 
     // Steer away from walls early; a wandering fish also turns its heading back toward open water.
@@ -260,9 +200,9 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
     }
 
     // Swimming: limited turn rate, slows in sharp turns, kick-and-glide.
-    val fast = mode == Mode.FLEE || mode == Mode.HUNT || lunging || t.boost > 0f
+    val fast = mode == Mode.FLEE || t.boost > 0f
     val ds = hypot(dvx, dvy)
-    val cap = if (mode == Mode.FLEE) spd.flee else if (kind == Kind.SHARK) (if (lunging || mode == Mode.HUNT) 520f else 220f) else 260f
+    val cap = if (mode == Mode.FLEE) spd.flee else 260f
     var want = min(ds, cap)
     val turnMax = tr.turn * (if (fast) 3.5f else 1f)
     if (ds > 4f) {
@@ -292,15 +232,13 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
     if (t.z <= 0f || t.z >= 1f) t.zv = 0f
 
     // At the surface: gulps ring the water, a moving fish leaves a faint wake, then it dives back.
-    t.bite = max(0f, t.bite - dt * (if (kind == Kind.SHARK) 1f / 1.17f else 3f)) // the shark's bite plays its 1.17 s sequence
+    t.bite = max(0f, t.bite - dt * 3f)
     if (t.z < 0.1f) {
         t.popT -= dt
         if (t.popT <= 0f) {
             t.popT = 1.2f + Random.nextFloat() * 0.8f
-            if (kind != Kind.SHARK) {
-                t.bite = max(t.bite, 0.7f)
-                sim.disturb((t.x + cos(t.angle) * t.r) / cell, (t.y + sin(t.angle) * t.r) / cell, (t.r / cell) * 0.5f, -0.6f)
-            }
+            t.bite = max(t.bite, 0.7f)
+            sim.disturb((t.x + cos(t.angle) * t.r) / cell, (t.y + sin(t.angle) * t.r) / cell, (t.r / cell) * 0.5f, -0.6f)
         }
         t.wakeT -= dt
         if (t.speed > 25f && t.wakeT <= 0f) {
@@ -313,18 +251,5 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
     if (t.surfT > 0f && t.z < 0.12f) {
         t.surfT -= dt
         if (t.surfT <= 0f) t.zGoal = tr.zMin + (tr.zMax - tr.zMin) * Random.nextFloat()
-    }
-
-    // Shark snaps at the moving finger.
-    if (kind == Kind.SHARK && intent.mode == Mode.HUNT) {
-        val hx = t.x + cos(t.angle) * t.r * 1.1f
-        val hy = t.y + sin(t.angle) * t.r * 1.1f
-        for (p in touches) {
-            if (hypot(p.x - hx, p.y - hy) < t.r * 0.8f && t.bite <= 0f) {
-                t.bite = 1f
-                sim.disturb(hx / cell, hy / cell, (t.r / cell) * 0.9f, -4f)
-                t.speed *= 0.3f
-            }
-        }
     }
 }

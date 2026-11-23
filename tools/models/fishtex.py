@@ -1,7 +1,5 @@
 """Texture / rig helpers shared by the fish exporters (extracted from the older sprite baker)."""
 import numpy as np, cv2
-from skinmesh import load_parts, pose
-SHARK_FBX = '../../assets-src/realistic-shark/source/Realistic Shark.fbx'
 SRC = '../../assets-src'
 def smooth(e0, e1, x):
     t = np.clip((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t)
@@ -26,18 +24,3 @@ def eye_mask(tex):
     for i in idx:
         r=max(st[i,2],st[i,3])*1.05+8; cv2.circle(m,(int(cen[i][0]),int(cen[i][1])),int(r),1.0,-1)
     return cv2.GaussianBlur(m,(0,0),3)
-
-JAW_GAIN=1.9
-def amplify_jaw(sc,stack,gain):
-    nid=[i for i in sc.models if sc.name[i].startswith('Jaw')][0]
-    for ax in 'XYZ':
-        cv=sc.stacks[stack].get((nid,'Lcl Rotation',ax))
-        if cv is not None: cv.v=cv.v[0]+gain*(cv.v-cv.v[0])
-def shark_setup():
-    """Shark body, teeth and eyes with the jaw motion amplified; returns the canonical frame (x forward, y left, z up) and its extent."""
-    sc, parts = load_parts(SHARK_FBX, only=['white-shark_body', 'white-shark_tooth-top.001', 'white-shark_tooth-bottom.001', 'white-shark_eyes.003'])
-    amplify_jaw(sc, 'Shark Rig|bite_skeletal.3', JAW_GAIN)
-    canon = lambda p: np.stack([p[..., 2], p[..., 0], p[..., 1]], -1)
-    b = [canon(pose(sc, p, None, 0)[0]) for p in parts]
-    allp = np.concatenate([x.reshape(-1, 3) for x in b])
-    return sc, parts, None, canon, float(allp[:, 0].max()), float(allp[:, 0].min())

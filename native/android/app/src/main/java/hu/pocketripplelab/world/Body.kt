@@ -148,15 +148,8 @@ class Pose(val px: Float, val py: Float, val pz: Float, val q: Quat, val scale: 
 fun poseOf(t: Thing, eye: Eye): Pose {
     if (t.kind.isFish) {
         val depth = t.z * eye.floor * 0.85f
-        var pitch = clamp(t.zv * 0.9f, -0.5f, 0.5f)
-        var roll = clamp(t.turn * 0.2f, -0.7f, 0.7f)
-        if (t.kind == Kind.SHARK && t.bite > 0f) {
-            // "ham, ham": the head comes up and rolls toward the viewer so the teeth show
-            val p = 1f - t.bite
-            val e = smooth(0f, 0.21f, p) * (1f - smooth(0.75f, 0.96f, p))
-            pitch -= 0.26f * e
-            roll -= 1.26f * e
-        }
+        val pitch = clamp(t.zv * 0.9f, -0.5f, 0.5f)
+        val roll = clamp(t.turn * 0.2f, -0.7f, 0.7f)
         return Pose(t.x, -t.y, -(depth + 0.12f * t.r), qYawPitchRoll(-t.angle, pitch, roll), t.r * fishLen(t.kind))
     }
     return Pose(t.x, -t.y, t.h, t.q, t.r)

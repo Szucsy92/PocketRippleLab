@@ -13,7 +13,7 @@ export type PackMat = {
   vcol?: boolean;
 };
 export type PackPart = { start: number; count: number; mat: PackMat };
-export type PackClip = { start: number; count: number; fps: number; loop: boolean };
+export type PackClip = { start: number; count: number; fps: number; loop: boolean; cycles?: number };
 export type PackData = {
   name: string;
   frames: number;

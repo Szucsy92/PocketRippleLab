@@ -17,7 +17,7 @@ const THINGS: { kind: Kind; label: string; icon: string }[] = [
   { kind: "koi", label: "Bohóchal", icon: "🐠" },
   { kind: "tang", label: "Kék hal", icon: "🐟" },
   { kind: "perch", label: "Zöld hal", icon: "🐡" },
-  { kind: "shark", label: "Cápa", icon: "🦈" },
+  { kind: "alien", label: "Idegen hal", icon: "👽" },
 ];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -136,7 +136,7 @@ export function SettingsPanel(props: {
         </Section>
 
         <Section title="Döntés">
-          <Toggle label="A telefon döntése mozgatja a vizet" on={s.tiltOn} onChange={(v) => onChange({ tiltOn: v })} />
+          <Toggle label="A telefon döntése a nézőpontot változtatja" on={s.tiltOn} onChange={(v) => onChange({ tiltOn: v })} />
           <Button variant="ghost" className="btn-ghost w-full" onClick={props.onLevel}>A mostani helyzet legyen a vízszintes</Button>
         </Section>
 

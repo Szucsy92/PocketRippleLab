@@ -9,10 +9,10 @@ Valódi 3D hálók (`.prm`) és textúrák; lásd `tools/models/` az előállít
 | `duck.prm`, `duck_base/rough/normal.webp` | gumikacsa (kopott textúra, normal map-pel) |
 | `boat.prm`, `boat_wood.webp` | vitorlás |
 | `clown.prm`, `koi/tang/perch.webp`, `fish_normal.webp` | bohóchal, 24 képkockás úszás-animáció, 3 színváltozat |
-| `shark.prm`, `shark.webp` | cápa, 12 képkockás úszás + 20 képkockás harapás |
+| `alien.prm`, `alien.webp`, `alien_rough.webp`, `alien_normal.webp` | idegen hal (mélytengeri, világító foltokkal), 32 képkockás úszás-hurok (5 farokcsapás), normal + roughness map |
 
 ## Források és jogok
 
 - **Strandlabda** – "Beach Ball (Free Download)", Tommyleenev, [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/) – https://sketchfab.com/3d-models/beach-ball-free-download-c915a99e9bae4dbe8dd7be3215e19ba0 (a második minta ugyanaz a háló rózsaszín/kék palettával).
-- **Cápa** ("Realistic Shark"), **bohóchal** ("Fish_001") és **gumikacsa** ("rubber_duck_toy"): a feltöltött modellek; a bohóchal három színváltozata a textúra átszínezésével készült, a kacsa a kopott (dirty) textúrával. A licencüket ellenőrizd a forrásoldalukon, mielőtt kiadod az appot.
+- **Idegen hal** ("Alien Fish (animated)"), **bohóchal** ("Fish_001") és **gumikacsa** ("rubber_duck_toy"): a feltöltött modellek; a bohóchal három színváltozata a textúra átszínezésével készült, a kacsa a kopott (dirty) textúrával. A licencüket ellenőrizd a forrásoldalukon, mielőtt kiadod az appot.
 - **Mentőgyűrű, vitorlás**: saját modell.

@@ -6,9 +6,8 @@ from pack import Pack
 from skinmesh import load_parts, pose
 from fishbake import subdivide_phong
 OUT='../../src/assets/models'
-CLOWN='../../assets-src/clown-fish'; SHARK='../../assets-src/realistic-shark'
-CLOWN_FBX=f'{CLOWN}/source/cab939cb4ecb4ab583940af6e5c384c5.fbx.fbx'; SHARK_FBX=f'{SHARK}/source/Realistic Shark.fbx'
-B.SHARK_FBX=SHARK_FBX
+CLOWN='../../assets-src/clown-fish'
+CLOWN_FBX=f'{CLOWN}/source/cab939cb4ecb4ab583940af6e5c384c5.fbx.fbx'
 def save_tex(arr,name,q=86,alpha=None):
     a=(np.clip(arr,0,1)*255+0.5).astype(np.uint8)
     if alpha is not None: Image.fromarray(np.dstack([a,(np.clip(alpha,0,1)*255+0.5).astype(np.uint8)]),'RGBA').save(f'{OUT}/{name}','WEBP',quality=q,alpha_quality=100,method=6)
@@ -70,7 +69,7 @@ def build(name,meshes,stackframes,xf,mats,length,extra_cols=None,clips=None):
     pk.build(pos,nrm,uv,np.concatenate(idx),col); return pk
 def export_clown():
     sc,parts=load_parts(CLOWN_FBX); part=parts[0]; stack=list(sc.stacks)[0]; t0,t1=sc.stack_range(stack); period=t1-t0
-    canon=lambda p: np.stack([p[...,2],-p[...,0],-p[...,1]],-1)
+    canon=lambda p: np.stack([p[...,2],p[...,0],p[...,1]],-1)   # fwd = +z (nose), left = +x, up = +y (the fish's back)
     m=SoupMesh(sc,part,canon,stack,cell=None,subdiv=2)
     Pb,_,_=m.raw(None,0); xn,xt=float(Pb[...,0].max()),float(Pb[...,0].min()); Lm=xn-xt; pivot=xn-0.444*Lm
     xf=lambda P: (P-np.array([pivot,0,0]))/Lm
@@ -86,22 +85,28 @@ def export_clown():
     for nm,tx in variants.items(): save_tex(rs(tx,1024),f'{nm}.webp',alpha=rs(solid,1024),q=88)
     h=rs(bump,1024); h=cv2.GaussianBlur(h,(0,0),1.0); gy,gx=np.gradient(h); n=np.dstack([-gx*8,-gy*8,np.ones_like(h)]); n/=np.linalg.norm(n,axis=-1,keepdims=True)
     save_tex(n*0.5+0.5,'fish_normal.webp',q=90)
-def export_shark():
-    names=['white-shark_body','white-shark_tooth-top.001','white-shark_tooth-bottom.001','white-shark_eyes.003']
-    sc,parts,mats_,canon,xn,xt=B.shark_setup()
-    Lm=xn-xt; pivot=xn-0.444*Lm; xf=lambda P: (P-np.array([pivot,0,0]))/Lm
-    cells=[Lm/75,Lm/260,Lm/260,Lm/300]
-    meshes=[SoupMesh(sc,p,canon,None,cell=c) for p,c in zip(parts,cells)]
-    print('shark verts',[m.nv for m in meshes],'tris',[len(m.T) for m in meshes],flush=True)
-    swim_st='Shark Rig|swimming_skeletal.3'; bite_st='Shark Rig|bite_skeletal.3'
-    NS=12; NB=20
-    frames=[(swim_st,2.0*k/NS) for k in range(NS)]+[(bite_st,(4+(n*14.0/20.0)%14)/24.0) for n in range(NB)]
-    mats=[dict(tex='shark.webp',rough=0.5,spec=0.35,gain=1.0),dict(tex='shark.webp',rough=0.3,spec=0.5,gain=1.3),dict(tex='shark.webp',rough=0.3,spec=0.5,gain=1.3),dict(rough=0.12,spec=1.0,vcol=True)]
-    cols=[np.full((m.nv,4),255) for m in meshes]; cols[3]=np.tile(np.array([6,7,13,255]),(meshes[3].nv,1))
-    pk=build('shark',meshes,frames,xf,mats,1.0,extra_cols=cols,clips=dict(swim=dict(start=0,count=NS,fps=NS/2.0,loop=True),bite=dict(start=NS,count=NB,fps=NB/1.17,loop=False)))
-    print('shark',pk.save(f'{OUT}/shark.prm'))
-    tex=B.tex_rgb(f'{SHARK}/textures/Shark_Skin.jpeg'); lum=tex.mean(-1,keepdims=True)
-    tint=np.clip((lum**0.85*1.25)*np.array([0.72,0.86,1.02]),0,1); graded=np.clip(tint+(tex-lum)*1.0,0,1)
-    save_tex(rs(graded,1536),'shark.webp',q=84)
+def export_alien():
+    """The alien fish: one skinned mesh with an 8.3 s looping swim; reduced by vertex clustering, baked per frame."""
+    ALIEN='../../assets-src/alien-fish'
+    sc,parts=load_parts(f'{ALIEN}/source/Alien Fish (animated).fbx')
+    stack=list(sc.stacks)[0]; t0,t1=sc.stack_range(stack); period=float(t1-t0)
+    canon=lambda p: np.stack([p[...,2],p[...,0],p[...,1]],-1)   # fwd = +z (nose), left = +x, up = +y (the back)
+    Pb=canon(pose(sc,parts[0],None,0)[0]); xn,xt=float(Pb[...,0].max()),float(Pb[...,0].min()); Lm=xn-xt; pivot=xn-0.444*Lm
+    xf=lambda P: (P-np.array([pivot,0,0]))/Lm
+    m=SoupMesh(sc,parts[0],canon,None,cell=Lm/90)
+    print('alien verts',m.nv,'tris',len(m.T),'period',period,flush=True)
+    NF=32
+    frames=[(stack,t0+period*k/NF) for k in range(NF)]
+    mat=dict(tex='alien.webp',rmap='alien_rough.webp',nmap='alien_normal.webp',rough=0.5,spec=0.6,gain=1.0,nstrength=0.8)
+    # the loop holds about 5 tail beats: one tail phase (2 pi) plays a fifth of it
+    pk=build('alien',[m],frames,xf,[mat],1.0,clips=dict(swim=dict(start=0,count=NF,fps=NF/period,loop=True,cycles=5)))
+    print('alien',pk.save(f'{OUT}/alien.prm'))
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS=None
+    def rd(f,mode): return Image.open(f'{ALIEN}/textures/{f}').convert(mode)
+    rd('texture_pbr_20250901.png','RGB').resize((2048,2048),Image.LANCZOS).save(f'{OUT}/alien.webp','WEBP',quality=84,method=6)
+    rd('texture_pbr_20250901_normal.png','RGB').resize((1024,1024),Image.LANCZOS).save(f'{OUT}/alien_normal.webp','WEBP',quality=90,method=6)
+    rd('texture_pbr_20250901_roughness.png','L').resize((1024,1024),Image.LANCZOS).save(f'{OUT}/alien_rough.webp','WEBP',quality=80,method=6)
+
 if __name__=='__main__':
-    for w in sys.argv[1:]: {'clown':export_clown,'shark':export_shark}[w]()
+    for w in sys.argv[1:]: {'clown':export_clown,'alien':export_alien}[w]()

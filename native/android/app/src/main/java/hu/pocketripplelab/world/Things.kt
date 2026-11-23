@@ -10,17 +10,17 @@ import kotlin.random.Random
 
 enum class Kind(val isFish: Boolean) {
     DUCK(false), BOAT(false), BALL(false), RING(false),
-    KOI(true), TANG(true), PERCH(true), SHARK(true);
+    KOI(true), TANG(true), PERCH(true), ALIEN(true);
 }
 
-val FISH_KINDS = listOf(Kind.KOI, Kind.TANG, Kind.PERCH, Kind.SHARK)
+val FISH_KINDS = listOf(Kind.KOI, Kind.TANG, Kind.PERCH, Kind.ALIEN)
 
 /** Drawn nose-to-tail length of each fish in radii (the fish meshes are normalised to length 1). */
 fun fishLen(k: Kind): Float = when (k) {
     Kind.KOI -> 2.8f
     Kind.TANG -> 2.5f
     Kind.PERCH -> 2.7f
-    else -> 3.4f
+    else -> 3.4f // the alien fish
 }
 
 /** Every toy and fish is 3x the original size. */
@@ -37,7 +37,7 @@ fun physOf(k: Kind): Phys = when (k) {
     Kind.KOI -> Phys(500f, 2.2f, 18f, 3f)
     Kind.TANG -> Phys(500f, 2.2f, 14f, 3f)
     Kind.PERCH -> Phys(500f, 2.2f, 15f, 3f)
-    Kind.SHARK -> Phys(250f, 1.8f, 30f, 1.5f)
+    Kind.ALIEN -> Phys(400f, 2.2f, 19f, 2.5f)
 }
 
 /**
@@ -76,7 +76,7 @@ class Thing(val kind: Kind, var x: Float, var y: Float, val r: Float) {
     var grabbed: Int? = null
     var wakeT = 0f
 
-    /** Fish: wander target heading, fear (0..1), tail beat phase, bite animation 0..1. */
+    /** Fish: wander target heading, fear (0..1), tail beat phase, gulp animation 0..1. */
     var wander = Random.nextFloat() * 2f * PI.toFloat()
     var fear = 0f
     var tail = Random.nextFloat() * 6f
@@ -113,7 +113,7 @@ fun makeThing(kind: Kind, x: Float, y: Float, scale: Float): Thing {
     val r = physOf(kind).size * SIZE_FACTOR * scale * (0.92f + Random.nextFloat() * 0.16f)
     val t = Thing(kind, x, y, r)
     if (kind.isFish) {
-        val z0 = (if (kind == Kind.SHARK) 0.6f else 0.35f) + Random.nextFloat() * 0.3f
+        val z0 = 0.35f + Random.nextFloat() * 0.3f
         t.z = z0
         t.zGoal = z0
     } else {

@@ -65,7 +65,7 @@ private val TOYS = listOf(
     Toy(Kind.KOI, "Bohóchal", "🐠"),
     Toy(Kind.TANG, "Kék hal", "🐟"),
     Toy(Kind.PERCH, "Zöld hal", "🐡"),
-    Toy(Kind.SHARK, "Cápa", "🦈"),
+    Toy(Kind.ALIEN, "Idegen hal", "👽"),
 )
 
 private val MOOD_ASSETS = mapOf(Mood.POOL to "pool-floor.jpg", Mood.LAKE to "lake-floor.jpg", Mood.SEA to "sea-floor.jpg")

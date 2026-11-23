@@ -22,7 +22,7 @@ class PackMat(
 
 class PackPart(val start: Int, val count: Int, val mat: PackMat)
 
-class PackClip(val start: Int, val count: Int, val fps: Float, val loop: Boolean)
+class PackClip(val start: Int, val count: Int, val fps: Float, val loop: Boolean, val cycles: Float)
 
 /** A mesh pack: one static mesh or per-frame baked animation (positions / normals per frame, shared UVs and indices). */
 class Pack(
@@ -160,7 +160,7 @@ fun parsePack(file: ByteArray): Pack {
         while (names.hasNext()) {
             val name = names.next()
             val c = ca.getJSONObject(name)
-            clips[name] = PackClip(c.getInt("start"), c.getInt("count"), c.getDouble("fps").toFloat(), c.optBoolean("loop", false))
+            clips[name] = PackClip(c.getInt("start"), c.getInt("count"), c.getDouble("fps").toFloat(), c.optBoolean("loop", false), c.optDouble("cycles", 1.0).toFloat())
         }
     }
     return Pack(frames, verts, parts, clips, pos, nrm, uv, col, idx)

@@ -149,13 +149,9 @@ export class ObjectRenderer {
   private frameOf(t: Thing, m: Model): { f0: number; f1: number; blend: number } {
     const clips = m.pack.clips;
     const swim = clips["swim"];
-    if (t.kind === "shark" && t.bite > 0 && clips["bite"]) {
-      const c = clips["bite"];
-      const f = clipFrame(c, (1 - t.bite) * (c.count / c.fps));
-      return { f0: f.f0, f1: f.f1, blend: f.t };
-    }
     if (swim) {
-      const f = clipFrame(swim, (t.tail / (Math.PI * 2)) * (swim.count / swim.fps));
+      // One tail phase (2 pi) plays 1 / cycles of the loop: the alien's long loop holds several tail beats.
+      const f = clipFrame(swim, (t.tail / (Math.PI * 2 * (swim.cycles ?? 1))) * (swim.count / swim.fps));
       return { f0: f.f0, f1: f.f1, blend: f.t };
     }
     return { f0: 0, f1: 0, blend: 0 };

@@ -89,9 +89,9 @@ class NativeLogicTest {
     }
 
     @Test
-    fun theSharkRarelySurfacesAndNobodyInspectsWithoutATarget() {
+    fun theDeepAlienSurfacesLessAndNobodyInspectsWithoutATarget() {
         assertEquals(Action.SURFACE, fishDecision(Kind.KOI, 0.1f, 0.5f, false).action)
-        assertTrue(fishDecision(Kind.SHARK, 0.1f, 0.5f, false).action != Action.SURFACE)
+        assertTrue(fishDecision(Kind.ALIEN, 0.15f, 0.5f, false).action != Action.SURFACE)
         assertEquals(Action.SWIM, fishDecision(Kind.KOI, 0.9f, 0.5f, true).action)
     }
 }

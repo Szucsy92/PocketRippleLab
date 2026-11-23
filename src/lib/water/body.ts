@@ -117,19 +117,9 @@ export type Pose = { pos: Vec3; q: Quat; scale: number; alpha: number };
 export function poseOf(t: Thing, eye: Eye): Pose {
   if (isFish(t.kind)) {
     const depth = t.z * eye.floor * 0.85;
-    let pitch = clamp(t.zv * 0.9, -0.5, 0.5);
-    let roll = clamp(t.turn * 0.2, -0.7, 0.7);
-    if (t.kind === "shark" && t.bite > 0) {
-      // "ham, ham": the head comes up and rolls toward the viewer so the teeth show
-      const p = 1 - t.bite, e = smooth(0, 0.21, p) * (1 - smooth(0.75, 0.96, p));
-      pitch -= 0.26 * e;
-      roll -= 1.26 * e;
-    }
+    const pitch = clamp(t.zv * 0.9, -0.5, 0.5);
+    const roll = clamp(t.turn * 0.2, -0.7, 0.7);
     return { pos: [t.x, -t.y, -(depth + 0.12 * t.r)], q: qYawPitchRoll(-t.angle, pitch, roll), scale: t.r * FISH_LEN[t.kind], alpha: 1 };
   }
   return { pos: [t.x, -t.y, t.h], q: t.q, scale: t.r, alpha: 1 };
 }
-const smooth = (a: number, b: number, x: number) => {
-  const u = clamp((x - a) / (b - a), 0, 1);
-  return u * u * (3 - 2 * u);
-};

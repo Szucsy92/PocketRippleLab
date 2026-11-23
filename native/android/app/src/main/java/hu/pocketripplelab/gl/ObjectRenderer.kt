@@ -35,7 +35,7 @@ fun modelKey(k: Kind): String = when (k) {
     Kind.BOAT -> "boat"
     Kind.BALL -> "ball"
     Kind.RING -> "ring"
-    Kind.SHARK -> "shark"
+    Kind.ALIEN -> "alien"
 }
 
 /** Which entry of a texture list (colour variant) this object uses. */
@@ -265,12 +265,9 @@ class ObjectRenderer(private val ctx: Context) {
             var f1 = 0
             var blend = 0f
             val swim = m.pack.clips["swim"]
-            val bite = m.pack.clips["bite"]
-            if (t.kind == Kind.SHARK && t.bite > 0f && bite != null) {
-                val f = clipFrame(bite, (1f - t.bite) * (bite.count / bite.fps))
-                f0 = f.f0; f1 = f.f1; blend = f.t
-            } else if (swim != null) {
-                val f = clipFrame(swim, (t.tail / (2f * Math.PI.toFloat())) * (swim.count / swim.fps))
+            if (swim != null) {
+                // One tail phase (2 pi) plays 1 / cycles of the loop: the alien's long loop holds several tail beats.
+                val f = clipFrame(swim, (t.tail / (2f * Math.PI.toFloat() * swim.cycles)) * (swim.count / swim.fps))
                 f0 = f.f0; f1 = f.f1; blend = f.t
             }
             framePositions(m.pack, f0, f1, blend, m.posArr)

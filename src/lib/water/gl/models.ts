@@ -4,7 +4,6 @@ import ringPack from "../../../assets/models/ring.prm?url";
 import duckPack from "../../../assets/models/duck.prm?url";
 import boatPack from "../../../assets/models/boat.prm?url";
 import clownPack from "../../../assets/models/clown.prm?url";
-import sharkPack from "../../../assets/models/shark.prm?url";
 import ball0 from "../../../assets/models/ball0.webp";
 import ball1 from "../../../assets/models/ball1.webp";
 import ring0 from "../../../assets/models/ring0.webp";
@@ -16,19 +15,22 @@ import boatWood from "../../../assets/models/boat_wood.webp";
 import koiTex from "../../../assets/models/koi.webp";
 import tangTex from "../../../assets/models/tang.webp";
 import perchTex from "../../../assets/models/perch.webp";
-import sharkTex from "../../../assets/models/shark.webp";
+import alienPack from "../../../assets/models/alien.prm?url";
+import alienTex from "../../../assets/models/alien.webp";
+import alienRough from "../../../assets/models/alien_rough.webp";
+import alienNormal from "../../../assets/models/alien_normal.webp";
 import fishNormal from "../../../assets/models/fish_normal.webp";
 
 /**
  * Every toy and fish is a mesh pack (tools/models). The clown fish (koi / tang / perch) is one mesh in three colours.
  * Pack mesh data and texture file names are resolved through these two tables.
  */
-export type ModelKey = "ball" | "ring" | "duck" | "boat" | "clown" | "shark";
-export const PACKS: Record<ModelKey, string> = { ball: ballPack, ring: ringPack, duck: duckPack, boat: boatPack, clown: clownPack, shark: sharkPack };
+export type ModelKey = "ball" | "ring" | "duck" | "boat" | "clown" | "alien";
+export const PACKS: Record<ModelKey, string> = { ball: ballPack, ring: ringPack, duck: duckPack, boat: boatPack, clown: clownPack, alien: alienPack };
 export const TEXTURES: Record<string, string> = {
   "ball0.webp": ball0, "ball1.webp": ball1, "ring0.webp": ring0, "ring1.webp": ring1,
   "duck_base.webp": duckBase, "duck_rough.webp": duckRough, "duck_normal.webp": duckNormal, "boat_wood.webp": boatWood,
-  "koi.webp": koiTex, "tang.webp": tangTex, "perch.webp": perchTex, "shark.webp": sharkTex, "fish_normal.webp": fishNormal,
+  "koi.webp": koiTex, "tang.webp": tangTex, "perch.webp": perchTex, "alien.webp": alienTex, "alien_rough.webp": alienRough, "alien_normal.webp": alienNormal, "fish_normal.webp": fishNormal,
 };
 
 export function modelKey(kind: Kind): ModelKey {
