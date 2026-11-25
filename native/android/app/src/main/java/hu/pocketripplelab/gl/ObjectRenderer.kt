@@ -10,6 +10,7 @@ import hu.pocketripplelab.water.link
 import hu.pocketripplelab.world.Kind
 import hu.pocketripplelab.world.Thing
 import hu.pocketripplelab.world.poseOf
+import hu.pocketripplelab.world.swimAmp
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
@@ -26,6 +27,8 @@ private class Model(
     val nrmArr: FloatArray,
     val posData: FloatBuffer,
     val nrmData: FloatBuffer,
+    /** Animated fish: the neutral (mean) pose the swim amplitude blends toward. */
+    val neutral: NeutralPose?,
 )
 
 /** Which mesh pack a kind uses; the clown fish (koi / tang / perch) is one mesh in three colours. */
@@ -174,7 +177,9 @@ class ObjectRenderer(private val ctx: Context) {
             GLES30.glBindBuffer(GLES30.GL_ELEMENT_ARRAY_BUFFER, bufs[4])
             GLES30.glBufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER, pack.idx.size * 2, idxData, GLES30.GL_STATIC_DRAW)
             GLES30.glBindVertexArray(0)
-            return Model(pack, vao, bufs[0], bufs[1], animated, posArr, nrmArr, posData, nrmData)
+            val swimClip = pack.clips["swim"]
+            val neutral = if (animated && swimClip != null) clipMean(pack, swimClip) else null
+            return Model(pack, vao, bufs[0], bufs[1], animated, posArr, nrmArr, posData, nrmData, neutral)
         } catch (e: Exception) {
             e.printStackTrace()
             failed.add(key)
@@ -272,6 +277,13 @@ class ObjectRenderer(private val ctx: Context) {
             }
             framePositions(m.pack, f0, f1, blend, m.posArr)
             frameNormals(m.pack, f0, f1, blend, m.nrmArr)
+            val neutral = m.neutral
+            if (neutral != null) {
+                // A slow fish bends only a little; the full baked swing is for a fish that really speeds up.
+                val amp = swimAmp(t.speed)
+                scaleBend(m.posArr, neutral.pos, amp, false)
+                scaleBend(m.nrmArr, neutral.nrm, amp, true)
+            }
             m.posData.position(0)
             m.posData.put(m.posArr).position(0)
             m.nrmData.position(0)

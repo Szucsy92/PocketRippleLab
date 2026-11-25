@@ -85,21 +85,49 @@ def export_clown():
     for nm,tx in variants.items(): save_tex(rs(tx,1024),f'{nm}.webp',alpha=rs(solid,1024),q=88)
     h=rs(bump,1024); h=cv2.GaussianBlur(h,(0,0),1.0); gy,gx=np.gradient(h); n=np.dstack([-gx*8,-gy*8,np.ones_like(h)]); n/=np.linalg.norm(n,axis=-1,keepdims=True)
     save_tex(n*0.5+0.5,'fish_normal.webp',q=90)
+def clown_spine(nb=40):
+    """Lateral offsets of the clown fish's spine per frame (normalised length units): d[k, bin], zero mean over the loop."""
+    sc,parts=load_parts(CLOWN_FBX); part=parts[0]; stack=list(sc.stacks)[0]; t0,t1=sc.stack_range(stack); period=float(t1-t0)
+    canon=lambda p: np.stack([p[...,2],p[...,0],p[...,1]],-1)   # fwd = +z (nose), left = +x, up = +y (the back)
+    m=SoupMesh(sc,part,canon,stack,cell=None,subdiv=2)
+    Pb,_,_=m.raw(None,0); xn,xt=float(Pb[...,0].max()),float(Pb[...,0].min()); Lm=xn-xt; pivot=xn-0.444*Lm
+    xf=lambda P: (P-np.array([pivot,0,0]))/Lm
+    NF=24
+    frames=[m.frame(stack,t0+period*k/NF,xf) for k in range(NF)]
+    lo,hi=-0.556,0.444
+    edges=np.linspace(lo,hi,nb+1); centers=(edges[:-1]+edges[1:])/2
+    d=np.zeros((NF,nb))
+    for k,V in enumerate(frames):
+        b=np.clip(np.digitize(V[:,0],edges)-1,0,nb-1)
+        cnt=np.bincount(b,minlength=nb); ysum=np.bincount(b,weights=V[:,1],minlength=nb)
+        y=np.where(cnt>0,ysum/np.maximum(cnt,1),np.nan)
+        ok=~np.isnan(y); y=np.interp(centers,centers[ok],y[ok])
+        d[k]=np.convolve(np.pad(y,2,mode='edge'),np.array([1,4,6,4,1])/16.0,mode='valid')
+    d-=d.mean(0,keepdims=True)
+    return centers,d,period,NF
+
+class RetargetMesh(SoupMesh):
+    """The alien's rest pose, bent frame by frame with the lateral offsets of the clown fish's spine (same swimming motion)."""
+    def set_motion(s,centers,d): s.centers=centers; s.d=d
+    def frame(s,stack,t,xf):
+        V=SoupMesh.frame(s,None,0,xf).copy()
+        V[:,1]+=np.interp(V[:,0],s.centers,s.d[int(t)])
+        return V
+
 def export_alien():
-    """The alien fish: one skinned mesh with an 8.3 s looping swim; reduced by vertex clustering, baked per frame."""
+    """The alien fish: one skinned mesh reduced by vertex clustering. It swims with the clown fish's motion (retargeted spine)."""
     ALIEN='../../assets-src/alien-fish'
     sc,parts=load_parts(f'{ALIEN}/source/Alien Fish (animated).fbx')
-    stack=list(sc.stacks)[0]; t0,t1=sc.stack_range(stack); period=float(t1-t0)
     canon=lambda p: np.stack([p[...,2],p[...,0],p[...,1]],-1)   # fwd = +z (nose), left = +x, up = +y (the back)
     Pb=canon(pose(sc,parts[0],None,0)[0]); xn,xt=float(Pb[...,0].max()),float(Pb[...,0].min()); Lm=xn-xt; pivot=xn-0.444*Lm
     xf=lambda P: (P-np.array([pivot,0,0]))/Lm
-    m=SoupMesh(sc,parts[0],canon,None,cell=Lm/90)
-    print('alien verts',m.nv,'tris',len(m.T),'period',period,flush=True)
-    NF=32
-    frames=[(stack,t0+period*k/NF) for k in range(NF)]
+    m=RetargetMesh(sc,parts[0],canon,None,cell=Lm/90)
+    centers,d,period,NF=clown_spine()
+    m.set_motion(centers,d)
+    print('alien verts',m.nv,'tris',len(m.T),'clown period',period,'spine swing',float(np.abs(d).max()),flush=True)
+    frames=[(None,k) for k in range(NF)]
     mat=dict(tex='alien.webp',rmap='alien_rough.webp',nmap='alien_normal.webp',rough=0.5,spec=0.6,gain=1.0,nstrength=0.8)
-    # the loop holds about 5 tail beats: one tail phase (2 pi) plays a fifth of it
-    pk=build('alien',[m],frames,xf,[mat],1.0,clips=dict(swim=dict(start=0,count=NF,fps=NF/period,loop=True,cycles=5)))
+    pk=build('alien',[m],frames,xf,[mat],1.0,clips=dict(swim=dict(start=0,count=NF,fps=NF/period,loop=True,cycles=1)))
     print('alien',pk.save(f'{OUT}/alien.prm'))
     from PIL import Image
     Image.MAX_IMAGE_PIXELS=None

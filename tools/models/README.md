@@ -10,6 +10,8 @@ python3 export_boat.py                    # vitorlás (procedurális háló)
 python3 export_fish.py clown alien        # bohóchal + idegen hal: az FBX csontvázas animációk vertex-képkockákra sütve
 ```
 
+Az idegen hal nem a saját (lassú, 8 mp-es) animációját használja: a `export_fish.py` a bohóchal gerincének oldalirányú mozgását (minden képkockára) ráhajlítja az idegen hal nyugalmi testére, így pontosan úgy úszik, mint a bohóchalak.
+
 A `.prm` ("mesh pack") egy JSON fejléc + bináris blokkok (`pack.py` írja, `gl/pack.ts` olvassa), a nagyobbak
 nyers deflate-tel tömörítve (`PRMZ`). A modell-egység a tárgy sugara (`t.r`); a halak hossza 1 egység, az origó az orruktól
 a hossz 0,444-ed részénél van. A `waterline` (merülési vonal) a `things.ts` `BODY` táblájával egyezik, ezt teszt őrzi.

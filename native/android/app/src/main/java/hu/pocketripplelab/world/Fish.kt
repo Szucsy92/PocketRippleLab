@@ -145,7 +145,14 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
             val cap = spd.cruise * 1.4f
             if (m > cap) { dvx *= cap / m; dvy *= cap / m }
         } else {
-            t.wander += (sin(t.phase * 0.37f + t.id) * 0.5f + (Random.nextFloat() - 0.5f) * 1.2f) * dt
+            // A smooth meander: the turn rate eases toward a new random target every couple of seconds (no per-frame noise).
+            t.wanderT -= dt
+            if (t.wanderT <= 0f) {
+                t.wanderT = 1.5f + Random.nextFloat() * 2.5f
+                t.wanderTarget = (Random.nextFloat() - 0.5f) * 0.9f
+            }
+            t.wanderRate += (t.wanderTarget - t.wanderRate) * min(1f, dt * 1.2f)
+            t.wander += (t.wanderRate + sin(t.phase * 0.37f + t.id) * 0.12f) * dt
             val v = spd.cruise * (if (t.restT > 0f) 0.08f else 1f)
             dvx = cos(t.wander) * v
             dvy = sin(t.wander) * v
@@ -186,37 +193,42 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
     else if (t.surfT > 0f) t.zGoal = 0.03f
 
     // Steer away from walls early; a wandering fish also turns its heading back toward open water.
-    val m = t.r * 3f
+    val m = t.r * 1.9f
     var wpx = 0f
     var wpy = 0f
-    if (t.x < m) wpx += (m - t.x) * 6f
-    if (t.x > width - m) wpx -= (t.x - width + m) * 6f
-    if (t.y < m) wpy += (m - t.y) * 6f
-    if (t.y > height - m) wpy -= (t.y - height + m) * 6f
+    if (t.x < m) wpx += (m - t.x) * 5f
+    if (t.x > width - m) wpx -= (t.x - width + m) * 5f
+    if (t.y < m) wpy += (m - t.y) * 5f
+    if (t.y > height - m) wpy -= (t.y - height + m) * 5f
     dvx += wpx
     dvy += wpy
     if (mode == Mode.CRUISE && (wpx != 0f || wpy != 0f)) {
         t.wander += angDiff(t.wander, atan2(wpy + sin(t.wander) * 20f, wpx + cos(t.wander) * 20f)) * min(1f, dt * 3f)
     }
 
-    // Swimming: limited turn rate, slows in sharp turns, kick-and-glide.
+    // Swimming: the desired velocity is smoothed (walls, schooling and the finger would otherwise make the heading
+    // twitch; a scared fish reacts fast), the turn rate eases toward what is needed, a sharp turn slows the fish down.
     val fast = mode == Mode.FLEE || t.boost > 0f
-    val ds = hypot(dvx, dvy)
-    val cap = if (mode == Mode.FLEE) spd.flee else 260f
+    val ks = min(1f, dt * (if (fast) 12f else 3f))
+    t.dsx += (dvx - t.dsx) * ks
+    t.dsy += (dvy - t.dsy) * ks
+    val ds = hypot(t.dsx, t.dsy)
+    // Walls, schooling and the finger steer the fish, but cruising never makes it dash: its speed stays near its cruise speed.
+    val cap = if (mode == Mode.FLEE) spd.flee else if (mode == Mode.COME) 180f else spd.cruise * 1.4f
     var want = min(ds, cap)
     val turnMax = tr.turn * (if (fast) 3.5f else 1f)
     if (ds > 4f) {
-        val dd = angDiff(t.angle, atan2(dvy, dvx))
-        val step = clamp(dd, -turnMax * dt, turnMax * dt)
-        t.angle += step
-        t.turn += (step / max(1e-4f, dt) - t.turn) * min(1f, dt * 8f)
+        val dd = angDiff(t.angle, atan2(t.dsy, t.dsx))
+        val wd = clamp(dd * (if (fast) 6f else 3f), -turnMax, turnMax) // desired turn rate
+        t.turn += (wd - t.turn) * min(1f, dt * (if (fast) 12f else 5f))
+        t.angle += t.turn * dt
         if (abs(t.turn) > 0.25f) t.side = sign(t.turn).toInt()
         want *= 0.25f + 0.75f * cos(min(abs(dd), (PI / 2).toFloat()))
     } else {
         t.turn *= exp(-dt * 4f)
         want = 0f
     }
-    val kick = if (want > 20f) 1f + 0.28f * sin(t.tail * 2f - 0.8f) else 1f
+    val kick = if (want > 20f) 1f + 0.08f * sin(t.tail * 2f - 0.8f) else 1f // a faint kick-and-glide
     t.speed += (want * kick - t.speed) * min(1f, dt * (if (fast) 8f else if (want > t.speed) 2.6f else 1.4f))
     t.vx = cos(t.angle) * t.speed
     t.vy = sin(t.angle) * t.speed
@@ -224,7 +236,9 @@ fun updateFish(t: Thing, world: World, sim: WaterSim, dt: Float) {
     val drift = (1f - t.z) * (1f - t.z) * cell * 1.2f
     t.x = clamp(t.x + (t.vx + fx * drift) * dt, t.r * 0.5f, width - t.r * 0.5f)
     t.y = clamp(t.y + (t.vy + fy * drift) * dt, t.r * 0.5f, height - t.r * 0.5f)
-    t.tail += dt * (3.2f + t.speed * 0.05f + (if (t.restT > 0f) 0.5f else 0f) + (if (fast) 6f else 0f))
+    // Tail beat: slow and steady while cruising, quicker only when the fish really speeds up.
+    val hz = min(1.6f, 0.42f + t.speed * 0.005f + (if (fast) 0.3f else 0f))
+    t.tail += dt * 2f * PI.toFloat() * hz
 
     // Depth: a damped spring toward the goal.
     t.zv += ((t.zGoal - t.z) * 6f - t.zv * 3.5f) * dt

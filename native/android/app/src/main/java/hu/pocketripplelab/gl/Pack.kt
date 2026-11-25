@@ -194,6 +194,49 @@ fun frameNormals(p: Pack, f0: Int, f1: Int, t: Float, out: FloatArray) {
     }
 }
 
+/** The neutral pose of a clip: the mean of its frames (positions and normals). Swim amplitude blends toward it. */
+class NeutralPose(val pos: FloatArray, val nrm: FloatArray)
+
+fun clipMean(p: Pack, clip: PackClip): NeutralPose {
+    val n = p.verts * 3
+    val pos = FloatArray(n)
+    val nrm = FloatArray(n)
+    val inv = 1f / clip.count
+    for (f in clip.start until clip.start + clip.count) {
+        val o = f * n
+        for (i in 0 until n) {
+            pos[i] += p.pos[o + i] * inv
+            nrm[i] += p.nrm[o + i] * inv
+        }
+    }
+    var i = 0
+    while (i < n) {
+        var l = Math.sqrt((nrm[i] * nrm[i] + nrm[i + 1] * nrm[i + 1] + nrm[i + 2] * nrm[i + 2]).toDouble()).toFloat()
+        if (l == 0f) l = 1f
+        nrm[i] /= l
+        nrm[i + 1] /= l
+        nrm[i + 2] /= l
+        i += 3
+    }
+    return NeutralPose(pos, nrm)
+}
+
+/** Scales the body bend of a frame blend: amp 0 = the neutral pose, 1 = the full baked motion. */
+fun scaleBend(out: FloatArray, neutral: FloatArray, amp: Float, normals: Boolean) {
+    for (i in out.indices) out[i] = neutral[i] + amp * (out[i] - neutral[i])
+    if (normals) {
+        var i = 0
+        while (i < out.size) {
+            var l = Math.sqrt((out[i] * out[i] + out[i + 1] * out[i + 1] + out[i + 2] * out[i + 2]).toDouble()).toFloat()
+            if (l == 0f) l = 1f
+            out[i] /= l
+            out[i + 1] /= l
+            out[i + 2] /= l
+            i += 3
+        }
+    }
+}
+
 /** Frame index and blend for a clip played at `time` seconds. */
 class ClipFrame(val f0: Int, val f1: Int, val t: Float)
 

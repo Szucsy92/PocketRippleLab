@@ -97,6 +97,13 @@ class Thing(val kind: Kind, var x: Float, var y: Float, val r: Float) {
     var turn = 0f
     var focus: Int? = null
 
+    /** Fish steering: a smooth meander (turn rate, its target and timer) and the smoothed desired velocity. */
+    var wanderRate = 0f
+    var wanderTarget = 0f
+    var wanderT = 0f
+    var dsx = 0f
+    var dsy = 0f
+
     /** Fish: last turn direction; ball / ring: colour variant 0 or 1. */
     var side = if (Random.nextBoolean()) 1 else -1
     var skin = if (Random.nextBoolean()) 0 else 1

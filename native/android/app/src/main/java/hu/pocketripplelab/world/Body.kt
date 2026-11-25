@@ -141,6 +141,9 @@ fun stepBody(t: Thing, dt: Float, gx: Float, gy: Float, splash: (Float) -> Unit)
     }
 }
 
+/** How much of the baked swim motion a fish shows: a gentle sway at rest, the full swing only when it speeds up. */
+fun swimAmp(speed: Float): Float = clamp(0.15f + speed / 190f, 0.15f, 1f)
+
 /** Where a thing is in the world and how it is oriented. */
 class Pose(val px: Float, val py: Float, val pz: Float, val q: Quat, val scale: Float)
 

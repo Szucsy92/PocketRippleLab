@@ -111,6 +111,11 @@ export function stepBody(t: Thing, dt: number, io: BodyIn) {
   }
 }
 
+/** How much of the baked swim motion a fish shows: a gentle sway at rest, the full swing only when it speeds up. */
+export function swimAmp(speed: number): number {
+  return clamp(0.15 + speed / 190, 0.15, 1);
+}
+
 export type Pose = { pos: Vec3; q: Quat; scale: number; alpha: number };
 
 /** Where a thing is in the world and how it is oriented. Fish: heading, pitch with their climb, bank into turns. */

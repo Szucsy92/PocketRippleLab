@@ -1,10 +1,10 @@
 import { FRAG, VERT } from "./shaders";
 import { PACKS, TEXTURES, modelKey, variantOf, type ModelKey } from "./models";
-import { clipFrame, framePositions, frameNormals, loadPack, type PackData, type PackMat } from "./pack";
+import { clipFrame, clipMean, framePositions, frameNormals, loadPack, scaleBend, type NeutralPose, type PackData, type PackMat } from "./pack";
 import { modelMatrix, normalize, rotationMatrix3, viewProj, type Vec3 } from "./mat";
 import { toyEye, type Eye } from "./camera";
 import { isFish, type Thing } from "../things";
-import { poseOf } from "../body";
+import { poseOf, swimAmp } from "../body";
 
 type Model = {
   pack: PackData;
@@ -14,6 +14,8 @@ type Model = {
   animated: boolean;
   posBuf: Float32Array;
   nrmBuf: Float32Array;
+  /** Animated fish: the neutral (mean) pose the swim amplitude blends toward. */
+  neutral: NeutralPose | null;
   indexType: number;
   indexBytes: number;
 };
@@ -142,7 +144,9 @@ export class ObjectRenderer {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, pack.idx, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
     const u32 = pack.idx instanceof Uint32Array;
-    return { pack, vao, pos, nrm, animated, posBuf, nrmBuf, indexType: u32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, indexBytes: u32 ? 4 : 2 };
+    const swim = pack.clips["swim"];
+    const neutral = animated && swim ? clipMean(pack, swim) : null;
+    return { pack, vao, pos, nrm, animated, posBuf, nrmBuf, neutral, indexType: u32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, indexBytes: u32 ? 4 : 2 };
   }
 
   /** Which frame of an animated model a thing shows right now. */
@@ -241,6 +245,12 @@ export class ObjectRenderer {
       const f = this.frameOf(t, m);
       framePositions(m.pack, f.f0, f.f1, f.blend, m.posBuf);
       frameNormals(m.pack, f.f0, f.f1, f.blend, m.nrmBuf);
+      if (m.neutral) {
+        // A slow fish bends only a little; the full baked swing is for a fish that really speeds up.
+        const amp = swimAmp(t.speed);
+        scaleBend(m.posBuf, m.neutral.pos, amp);
+        scaleBend(m.nrmBuf, m.neutral.nrm, amp, true);
+      }
       gl.bindBuffer(gl.ARRAY_BUFFER, m.pos);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, m.posBuf);
       gl.bindBuffer(gl.ARRAY_BUFFER, m.nrm);

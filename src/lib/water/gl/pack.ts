@@ -105,6 +105,32 @@ export function frameNormals(p: PackData, f0: number, f1: number, t: number, out
     out[i] = x / l; out[i + 1] = y / l; out[i + 2] = z / l;
   }
 }
+/** The neutral pose of a clip: the mean of its frames (positions and normals). Swim amplitude blends toward it. */
+export type NeutralPose = { pos: Float32Array; nrm: Float32Array };
+export function clipMean(p: PackData, clip: PackClip): NeutralPose {
+  const n = p.verts * 3;
+  const pos = new Float32Array(n), nrm = new Float32Array(n), tmp = new Float32Array(n);
+  for (let f = clip.start; f < clip.start + clip.count; f++) {
+    framePositions(p, f, f, 0, tmp);
+    for (let i = 0; i < n; i++) pos[i]! += tmp[i]! / clip.count;
+    frameNormals(p, f, f, 0, tmp);
+    for (let i = 0; i < n; i++) nrm[i]! += tmp[i]! / clip.count;
+  }
+  for (let i = 0; i < n; i += 3) {
+    const l = Math.hypot(nrm[i]!, nrm[i + 1]!, nrm[i + 2]!) || 1;
+    nrm[i]! /= l; nrm[i + 1]! /= l; nrm[i + 2]! /= l;
+  }
+  return { pos, nrm };
+}
+/** A frame blend with the body bend scaled: amp 0 = the neutral pose, 1 = the full baked motion. */
+export function scaleBend(out: Float32Array, neutral: Float32Array, amp: number, normals = false) {
+  for (let i = 0; i < out.length; i++) out[i] = neutral[i]! + amp * (out[i]! - neutral[i]!);
+  if (normals) for (let i = 0; i < out.length; i += 3) {
+    const l = Math.hypot(out[i]!, out[i + 1]!, out[i + 2]!) || 1;
+    out[i]! /= l; out[i + 1]! /= l; out[i + 2]! /= l;
+  }
+}
+
 /** Frame index and blend for a clip played at `time` seconds. */
 export function clipFrame(c: PackClip, time: number): { f0: number; f1: number; t: number } {
   const f = time * c.fps;

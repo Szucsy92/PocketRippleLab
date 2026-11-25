@@ -44,6 +44,12 @@ export type Thing = {
   speed: number;
   turn: number;
   focus: number | null;
+  /** Fish steering: a smooth meander (turn rate, its target and timer) and the smoothed desired velocity. */
+  wanderRate: number;
+  wanderTarget: number;
+  wanderT: number;
+  dsx: number;
+  dsy: number;
   /** Fish: which way it last turned (+1 clockwise / -1), picks the mirrored sprite pose. Ball/ring: colour variant 0 or 1. */
   side: number;
   skin: number;
@@ -96,6 +102,7 @@ export function makeThing(kind: Kind, x: number, y: number, scale: number): Thin
     angle: Math.random() * Math.PI * 2,
     wander: Math.random() * Math.PI * 2, fear: 0, tail: Math.random() * 6, bite: 0,
     z: 0, zGoal: 0, zv: 0, mind: Math.random() * 2, restT: 0, surfT: 0, popT: 0.2, boost: 0, speed: 0, turn: 0, focus: null,
+    wanderRate: 0, wanderTarget: 0, wanderT: 0, dsx: 0, dsy: 0,
     side: Math.random() < 0.5 ? 1 : -1, skin: Math.random() < 0.5 ? 0 : 1,
     color: kind === "duck" ? "#ffc93c" : kind === "ring" ? "#ffcf1f" : kind === "ball" ? "#e8322b" : "#b5763f",
     phase: Math.random() * 10, lift: 0,

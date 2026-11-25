@@ -103,7 +103,11 @@ export function updateFish(t: Thing, kind: FishKind, world: World, sim: WaterSim
       const m = Math.hypot(dvx, dvy), cap = spd.cruise * 1.4;
       if (m > cap) { dvx *= cap / m; dvy *= cap / m; }
     } else {
-      t.wander += (Math.sin(t.phase * 0.37 + t.id) * 0.5 + (Math.random() - 0.5) * 1.2) * dt;
+      // A smooth meander: the turn rate eases toward a new random target every couple of seconds (no per-frame noise).
+      t.wanderT -= dt;
+      if (t.wanderT <= 0) { t.wanderT = 1.5 + Math.random() * 2.5; t.wanderTarget = (Math.random() - 0.5) * 0.9; }
+      t.wanderRate += (t.wanderTarget - t.wanderRate) * Math.min(1, dt * 1.2);
+      t.wander += (t.wanderRate + Math.sin(t.phase * 0.37 + t.id) * 0.12) * dt;
       const v = spd.cruise * (t.restT > 0 ? 0.08 : 1);
       dvx = Math.cos(t.wander) * v; dvy = Math.sin(t.wander) * v;
       // Light schooling with the own kind at a similar depth.
@@ -133,34 +137,40 @@ export function updateFish(t: Thing, kind: FishKind, world: World, sim: WaterSim
   else if (t.surfT > 0) t.zGoal = 0.03;
 
   // Steer away from walls early; a wandering fish also turns its heading back toward open water.
-  const m = t.r * 3;
+  const m = t.r * 1.9;
   let wpx = 0, wpy = 0;
-  if (t.x < m) wpx += (m - t.x) * 6;
-  if (t.x > width - m) wpx -= (t.x - width + m) * 6;
-  if (t.y < m) wpy += (m - t.y) * 6;
-  if (t.y > height - m) wpy -= (t.y - height + m) * 6;
+  if (t.x < m) wpx += (m - t.x) * 5;
+  if (t.x > width - m) wpx -= (t.x - width + m) * 5;
+  if (t.y < m) wpy += (m - t.y) * 5;
+  if (t.y > height - m) wpy -= (t.y - height + m) * 5;
   dvx += wpx; dvy += wpy;
   if (mode === "cruise" && (wpx !== 0 || wpy !== 0)) {
     t.wander += angDiff(t.wander, Math.atan2(wpy + Math.sin(t.wander) * 20, wpx + Math.cos(t.wander) * 20)) * Math.min(1, dt * 3);
   }
 
-  // Swimming: limited turn rate, slows in sharp turns, kick-and-glide.
+  // Swimming: the desired velocity is smoothed (walls, schooling and the finger would otherwise make the heading
+  // twitch; a scared fish reacts fast), the turn rate eases toward what is needed, a sharp turn slows the fish down.
   const fast = mode === "flee" || t.boost > 0;
-  const ds = Math.hypot(dvx, dvy);
-  let want = Math.min(ds, mode === "flee" ? spd.flee : 260);
+  const ks = Math.min(1, dt * (fast ? 12 : 3));
+  t.dsx += (dvx - t.dsx) * ks;
+  t.dsy += (dvy - t.dsy) * ks;
+  const ds = Math.hypot(t.dsx, t.dsy);
+  // Walls, schooling and the finger steer the fish, but cruising never makes it dash: its speed stays near its cruise speed.
+  const cap = mode === "flee" ? spd.flee : mode === "come" ? 180 : spd.cruise * 1.4;
+  let want = Math.min(ds, cap);
   const turnMax = tr.turn * (fast ? 3.5 : 1);
   if (ds > 4) {
-    const dd = angDiff(t.angle, Math.atan2(dvy, dvx));
-    const step = clamp(dd, -turnMax * dt, turnMax * dt);
-    t.angle += step;
-    t.turn += (step / Math.max(1e-4, dt) - t.turn) * Math.min(1, dt * 8);
+    const dd = angDiff(t.angle, Math.atan2(t.dsy, t.dsx));
+    const wd = clamp(dd * (fast ? 6 : 3), -turnMax, turnMax); // desired turn rate
+    t.turn += (wd - t.turn) * Math.min(1, dt * (fast ? 12 : 5));
+    t.angle += t.turn * dt;
     if (Math.abs(t.turn) > 0.25) t.side = Math.sign(t.turn);
     want *= 0.25 + 0.75 * Math.cos(Math.min(Math.abs(dd), Math.PI / 2));
   } else {
     t.turn *= Math.exp(-dt * 4);
     want = 0;
   }
-  const kick = want > 20 ? 1 + 0.28 * Math.sin(t.tail * 2 - 0.8) : 1;
+  const kick = want > 20 ? 1 + 0.08 * Math.sin(t.tail * 2 - 0.8) : 1; // a faint kick-and-glide
   t.speed += (want * kick - t.speed) * Math.min(1, dt * (fast ? 8 : want > t.speed ? 2.6 : 1.4));
   t.vx = Math.cos(t.angle) * t.speed;
   t.vy = Math.sin(t.angle) * t.speed;
@@ -168,7 +178,9 @@ export function updateFish(t: Thing, kind: FishKind, world: World, sim: WaterSim
   const drift = (1 - t.z) * (1 - t.z) * cell * 1.2;
   t.x = clamp(t.x + (t.vx + fx * drift) * dt, t.r * 0.5, width - t.r * 0.5);
   t.y = clamp(t.y + (t.vy + fy * drift) * dt, t.r * 0.5, height - t.r * 0.5);
-  t.tail += dt * (3.2 + t.speed * 0.05 + (t.restT > 0 ? 0.5 : 0) + (fast ? 6 : 0));
+  // Tail beat: slow and steady while cruising, quicker only when the fish really speeds up.
+  const hz = Math.min(1.6, 0.42 + t.speed * 0.005 + (fast ? 0.3 : 0));
+  t.tail += dt * Math.PI * 2 * hz;
 
   // Depth: a damped spring toward the goal.
   t.zv += ((t.zGoal - t.z) * 6 - t.zv * 3.5) * dt;

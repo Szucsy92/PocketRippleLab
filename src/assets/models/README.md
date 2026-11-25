@@ -9,7 +9,7 @@ Valódi 3D hálók (`.prm`) és textúrák; lásd `tools/models/` az előállít
 | `duck.prm`, `duck_base/rough/normal.webp` | gumikacsa (kopott textúra, normal map-pel) |
 | `boat.prm`, `boat_wood.webp` | vitorlás |
 | `clown.prm`, `koi/tang/perch.webp`, `fish_normal.webp` | bohóchal, 24 képkockás úszás-animáció, 3 színváltozat |
-| `alien.prm`, `alien.webp`, `alien_rough.webp`, `alien_normal.webp` | idegen hal (mélytengeri, világító foltokkal), 32 képkockás úszás-hurok (5 farokcsapás), normal + roughness map |
+| `alien.prm`, `alien.webp`, `alien_rough.webp`, `alien_normal.webp` | idegen hal (mélytengeri, világító foltokkal), 24 képkockás úszás: a bohóchal gerincmozgását kapta meg (retarget), normal + roughness map |
 
 ## Források és jogok
 

@@ -72,9 +72,9 @@ describe("Water rules", () => {
     expect(sim.cur[20 * 41 + 20 + 13]).toBe(0);
   });
 });
-import { PHYS, BODY, fishIntent, fishDecision, makeThing, updateThings, drawUnder, eyeFor, poseOf, tumble, SIZE_FACTOR, FISH, hEq, type Kind, type World } from "../lib/water/objects";
+import { PHYS, BODY, fishIntent, fishDecision, makeThing, updateThings, drawUnder, eyeFor, poseOf, tumble, swimAmp, SIZE_FACTOR, FISH, hEq, type Kind, type World } from "../lib/water/objects";
 import { project, qRot, qAxisAngle, qMul, viewProj } from "../lib/water/gl/mat";
-import { parsePack } from "../lib/water/gl/pack";
+import { clipMean, framePositions, parsePack, scaleBend } from "../lib/water/gl/pack";
 import { toyEye } from "../lib/water/gl/camera";
 import { readFileSync } from "node:fs";
 import { inflateRawSync } from "node:zlib";
@@ -134,6 +134,31 @@ describe("Fish behaviour", () => {
     rnd.mockRestore();
     expect(maxTurn).toBeLessThan(11); // flee: 2.8 rad/s * 3.5
     expect(out).toBe(0);
+  });
+  it("swims smoothly: a calm heading, a slow steady tail beat, no dashing while cruising", () => {
+    let seed = 11;
+    const rnd = vi.spyOn(Math, "random").mockImplementation(() => (seed = (seed * 16807) % 2147483647) / 2147483647);
+    const w = world(), sim = new WaterSim(200, 360);
+    for (const k of ["koi", "tang", "alien"] as Kind[]) w.things.push(makeThing(k, 150 + Math.random() * 160, 250 + Math.random() * 300, 1));
+    const dt = 1 / 60;
+    const h = new Map<number, { a: number[]; tail: number[]; sp: number[] }>();
+    for (let i = 0; i < 60 * 40; i++) {
+      updateThings(w, sim, dt); sim.step();
+      if (i < 60 * 5) continue;
+      for (const t of w.things) { const e = h.get(t.id) ?? { a: [], tail: [], sp: [] }; e.a.push(t.angle); e.tail.push(t.tail); e.sp.push(t.speed); h.set(t.id, e); }
+    }
+    rnd.mockRestore();
+    const wrap = (d: number) => Math.atan2(Math.sin(d), Math.cos(d));
+    for (const e of h.values()) {
+      const turn: number[] = [], acc: number[] = [], tailRate: number[] = [];
+      for (let i = 1; i < e.a.length; i++) { turn.push(wrap(e.a[i]! - e.a[i - 1]!) / dt); tailRate.push((e.tail[i]! - e.tail[i - 1]!) / dt); }
+      for (let i = 1; i < turn.length; i++) acc.push((turn[i]! - turn[i - 1]!) / dt);
+      const rms = Math.sqrt(acc.reduce((p, c) => p + c * c, 0) / acc.length);
+      expect(rms).toBeLessThan(8); // it was ~30 rad/s^2 with the twitchy steering
+      expect(Math.max(...tailRate)).toBeLessThan(7.5); // under ~1.2 beats per second
+      expect(Math.min(...tailRate)).toBeGreaterThan(2);
+      expect(Math.max(...e.sp)).toBeLessThan(110); // walls and schooling steer, they do not make it dash
+    }
   });
   it("a scared fish dives", () => {
     const w = world(), sim = new WaterSim(200, 360);
@@ -343,11 +368,27 @@ describe("Mesh packs", () => {
       expect(p.parts.reduce((a, q) => a + q.count, 0)).toBe(p.idx.length);
     }
   });
-  it("hold animated fish: a swim loop each (the alien's loop holds several tail beats), no bite", () => {
+  it("hold animated fish: a swim loop each (the alien reuses the clown fish's motion), no bite", () => {
     const c = load("clown.prm"), a = load("alien.prm");
     expect(c.frames).toBe(24); expect(c.clips["swim"]?.loop).toBe(true);
-    expect(a.frames).toBe(32); expect(a.clips["swim"]?.count).toBe(32); expect(a.clips["swim"]?.cycles).toBe(5);
+    expect(a.frames).toBe(24); expect(a.clips["swim"]?.count).toBe(24); expect(a.clips["swim"]?.cycles).toBe(1); // the alien swims with the clown fish's motion
     for (const p of [c, a]) { expect(p.span[0]).toBeGreaterThan(0.8); expect(p.clips["bite"]).toBeUndefined(); } // about one length long
+  });
+  it("the swim amplitude grows with the speed, and the neutral pose is straighter than a baked frame", () => {
+    expect(swimAmp(0)).toBeCloseTo(0.15, 2);
+    expect(swimAmp(55)).toBeGreaterThan(0.3); expect(swimAmp(55)).toBeLessThan(0.6);
+    expect(swimAmp(480)).toBe(1);
+    expect(swimAmp(80)).toBeGreaterThan(swimAmp(40));
+    for (const name of ["clown.prm", "alien.prm"]) {
+      const p = load(name), clip = p.clips["swim"]!;
+      const neutral = clipMean(p, clip);
+      const f0 = new Float32Array(p.verts * 3);
+      framePositions(p, 0, 0, 0, f0);
+      const spread = (a: Float32Array) => { let lo = 1e9, hi = -1e9; for (let i = 1; i < a.length; i += 3) { lo = Math.min(lo, a[i]!); hi = Math.max(hi, a[i]!); } return hi - lo; };
+      expect(spread(neutral.pos)).toBeLessThan(spread(f0) * 0.75);
+      scaleBend(f0, neutral.pos, 0);
+      expect(Math.abs(f0[100]! - neutral.pos[100]!)).toBeLessThan(1e-6); // amp 0 = the neutral pose
+    }
   });
   it("the clown fish is right side up: its long dorsal fin is on top, the short pelvic fin below", () => {
     const p = load("clown.prm");
